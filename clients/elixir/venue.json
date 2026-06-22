@@ -1,0 +1,32 @@
+{
+  "id":             "elixir",
+  "name":           "Elixir Wine Lounge",
+  "logoUrl":        "clients/elixir/logo.png",
+  "address":        "123 Main Street, San Francisco CA 94105",
+  "welcomeMessage": "Welcome to Elixir! We've added tonight's wine list to your Journey. Ask our AI sommelier what to pair with your dinner.",
+  "ctaLabel":       "Reserve a Table",
+  "ctaUrl":         "https://elixirwinelounge.com/reservations",
+  "wines": [
+    {
+      "id": 9001, "name": "Château Margaux", "vintage": 2018,
+      "region": "Bordeaux, France", "grapes": ["Cabernet Sauvignon","Merlot"],
+      "rating": 98, "bc": "#8b2240", "lc": "#d4a84c",
+      "mode": "cellar", "tradeable": false,
+      "notes": "Featured tonight at Elixir Wine Lounge"
+    },
+    {
+      "id": 9002, "name": "Domaine Leroy Chambolle-Musigny", "vintage": 2019,
+      "region": "Burgundy, France", "grapes": ["Pinot Noir"],
+      "rating": 97, "bc": "#6a1828", "lc": "#c8a030",
+      "mode": "cellar", "tradeable": false,
+      "notes": "By the glass on Tuesdays"
+    },
+    {
+      "id": 9003, "name": "Opus One", "vintage": 2020,
+      "region": "Napa Valley, USA", "grapes": ["Cabernet Sauvignon","Merlot","Petit Verdot"],
+      "rating": 96, "bc": "#3a1020", "lc": "#8a7040",
+      "mode": "cellar", "tradeable": false,
+      "notes": "Elixir exclusive allocation"
+    }
+  ]
+}

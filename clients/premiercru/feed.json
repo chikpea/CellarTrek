@@ -1,0 +1,29 @@
+[
+  {
+    "id": "pc-evt001",
+    "type": "event",
+    "title": "Burgundy Tasting Evening — Sai Ying Pun",
+    "body": "Join John Dewe for an evening exploring the elegant Pinot Noir and Chardonnay of Burgundy. Limited seating at our High Street location.",
+    "ctaLabel": "Reserve Your Spot",
+    "ctaUrl": "https://www.premiercruhk.com/contactus",
+    "publishedAt": "June 18, 2026"
+  },
+  {
+    "id": "pc-arrival001",
+    "type": "arrival",
+    "title": "New Arrival: Puchang Wines from Xinjiang",
+    "body": "Discover Puchang's organic wines that embody the essence of the Gobi Desert terroir — a rare departure from our usual French focus, and a genuine discovery.",
+    "ctaLabel": "Shop Puchang Collection",
+    "ctaUrl": "https://www.premiercruhk.com/shop/puchang-muscat-2018-premier-cru-hong-kong-20",
+    "publishedAt": "June 15, 2026"
+  },
+  {
+    "id": "pc-promo001",
+    "type": "promotion",
+    "title": "Rhône Valley Selection — This Week",
+    "body": "Bold, expressive reds from the Rhône Valley, hand-picked by John. Stop by High Street to taste before you buy.",
+    "ctaLabel": null,
+    "ctaUrl": null,
+    "publishedAt": "June 12, 2026"
+  }
+]

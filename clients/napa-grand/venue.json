@@ -1,0 +1,18 @@
+{
+  "id":             "napa-grand",
+  "name":           "Napa Grand Hotel & Spa",
+  "logoUrl":        "clients/napa-grand/logo.png",
+  "address":        "1 Grand Avenue, Yountville CA 94599",
+  "welcomeMessage": "Welcome to the Napa Grand Wine Cellar. Our sommelier team has curated over 800 labels. Explore our list and plan your wine country experience.",
+  "ctaLabel":       "Book a Wine Experience",
+  "ctaUrl":         "https://napagrandhotel.com/wine-experiences",
+  "wines": [
+    {
+      "id": 9101, "name": "Harlan Estate", "vintage": 2018,
+      "region": "Napa Valley, USA", "grapes": ["Cabernet Sauvignon"],
+      "rating": 100, "bc": "#2a1020", "lc": "#c0a030",
+      "mode": "cellar", "tradeable": false,
+      "notes": "Napa Grand cellar selection"
+    }
+  ]
+}

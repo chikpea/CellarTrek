@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>CellarTrek — Venue Registration</title>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=Montserrat:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --wine:#8b2240;--wine-light:#b82040;--gold:#d4a84c;--gold-dim:rgba(212,168,76,.4);--gold-faint:rgba(212,168,76,.12);
+  --cream:#f5ede0;--cream-dim:rgba(245,237,224,.7);--cream-faint:rgba(245,237,224,.4);
+  --bg:#2a1520;--bg-card:rgba(50,20,28,.92);
+  --border:rgba(220,160,80,.25);--border-hi:rgba(220,160,80,.5);
+  --sans:'Montserrat',system-ui,sans-serif;--serif:'Cormorant Garamond',Georgia,serif;
+  --radius:6px;
+}
+body{font-family:var(--sans);background:var(--bg);color:var(--cream);min-height:100vh;display:flex;flex-direction:column}
+.page{flex:1;display:flex;align-items:flex-start;justify-content:center;padding:40px 20px}
+.card{background:var(--bg-card);border:1px solid var(--border);border-radius:10px;width:100%;max-width:560px;overflow:hidden}
+.card-header{padding:28px 32px 20px;border-bottom:1px solid var(--border)}
+.logo{font-family:var(--serif);font-size:26px;margin-bottom:6px}<br>
+.logo span{color:var(--gold)}
+.subtitle{font-size:12px;color:var(--cream-faint);line-height:1.6}
+.card-body{padding:28px 32px}
+.field{margin-bottom:18px}
+.field label{display:block;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--gold);margin-bottom:6px}
+.inp{width:100%;background:rgba(255,255,255,.08);border:1px solid var(--border);color:var(--cream);padding:11px 14px;font-size:13px;border-radius:var(--radius);outline:none;font-family:var(--sans);transition:border-color .2s}
+.inp:focus{border-color:var(--gold)}
+.inp::placeholder{color:var(--cream-faint)}
+select.inp option{background:#2a1520;color:var(--cream)}
+.row{display:flex;gap:12px}
+.row .field{flex:1}
+.hint{font-size:11px;color:var(--cream-faint);margin-top:4px;line-height:1.5}
+.btn{width:100%;padding:14px;background:var(--wine);color:var(--cream);border:none;border-radius:var(--radius);font-size:13px;font-weight:600;letter-spacing:.04em;cursor:pointer;font-family:var(--sans);transition:background .2s;margin-top:8px}
+.btn:hover{background:var(--wine-light)}
+.btn:disabled{opacity:.6;cursor:not-allowed}
+.error{background:rgba(184,32,64,.15);border:1px solid rgba(184,32,64,.4);border-radius:var(--radius);padding:12px 14px;font-size:12px;color:#e8a0a0;margin-bottom:16px;display:none}
+.success{background:rgba(127,174,106,.12);border:1px solid rgba(127,174,106,.35);border-radius:var(--radius);padding:20px;font-size:13px;color:#a8d89a;text-align:center;display:none}
+.divider{height:1px;background:var(--border);margin:20px 0}
+.section-title{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--cream-faint);margin-bottom:16px}
+.already{text-align:center;font-size:12px;color:var(--cream-faint);margin-top:20px}
+.already a{color:var(--gold);text-decoration:none}
+.step-dots{display:flex;gap:6px;justify-content:center;margin-bottom:24px}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--border)}
+.dot.active{background:var(--gold)}
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="card">
+    <div class="card-header">
+      <div class="logo"><span>Cellar</span>Trek</div>
+      <div style="font-size:18px;font-family:var(--serif);color:var(--cream);margin:8px 0 6px">Register your Venue</div>
+      <div class="subtitle">Join CellarTrek's venue network. Manage members, publish your wine catalog, and connect with collectors in your city — free to join, live immediately.</div>
+    </div>
+    <div class="card-body">
+      <div id="error" class="error"></div>
+      <div id="success" class="success">
+        <div style="font-size:28px;margin-bottom:10px">🎉</div>
+        <div style="font-size:16px;font-family:var(--serif);margin-bottom:6px;color:var(--cream)">Welcome to CellarTrek!</div>
+        <div style="margin-bottom:16px">Your venue is live. Redirecting you to your admin panel…</div>
+      </div>
+      <form id="signup-form">
+        <div class="section-title">Venue Details</div>
+        <div class="row">
+          <div class="field">
+            <label>Venue Name</label>
+            <input class="inp" id="venueName" placeholder="Premier Cru Wine Bar" required/>
+          </div>
+          <div class="field">
+            <label>Venue Type</label>
+            <select class="inp" id="venueType">
+              <option value="">Select type…</option>
+              <option value="wine bar">Wine Bar</option>
+              <option value="restaurant">Restaurant</option>
+              <option value="wine shop">Wine Shop</option>
+              <option value="winery">Winery</option>
+              <option value="hotel">Hotel</option>
+              <option value="other">Other</option>
+            </select>
+          </div>
+        </div>
+        <div class="field">
+          <label>Venue ID <span style="color:var(--cream-faint);font-size:9px;text-transform:none;letter-spacing:0">(used in your public URL)</span></label>
+          <input class="inp" id="venueId" placeholder="premiercru" required/>
+          <div class="hint" id="venue-id-preview">Your venue URL will be: <strong id="url-preview">/venues/premiercru</strong></div>
+        </div>
+        <div class="row">
+          <div class="field">
+            <label>City</label>
+            <input class="inp" id="city" placeholder="Hong Kong"/>
+          </div>
+          <div class="field">
+            <label>Country</label>
+            <input class="inp" id="country" placeholder="Hong Kong SAR"/>
+          </div>
+        </div>
+        <div class="field">
+          <label>Short Description</label>
+          <textarea class="inp" id="description" rows="2" style="resize:vertical" placeholder="A curated wine bar specialising in Burgundy and Bordeaux…"></textarea>
+        </div>
+
+        <div class="divider"></div>
+        <div class="section-title">Login Credentials</div>
+
+        <div class="field">
+          <label>Email</label>
+          <input class="inp" id="email" type="email" placeholder="hello@premiercru.hk" required/>
+        </div>
+        <div class="row">
+          <div class="field">
+            <label>Password</label>
+            <input class="inp" id="password" type="password" placeholder="Min. 8 characters" required/>
+          </div>
+          <div class="field">
+            <label>Confirm Password</label>
+            <input class="inp" id="confirm" type="password" placeholder="Repeat password" required/>
+          </div>
+        </div>
+
+        <button type="submit" class="btn" id="submit-btn">Register Venue →</button>
+      </form>
+      <div class="already">Already registered? <a href="/admin">Sign in to your admin panel</a></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const venueIdEl   = document.getElementById('venueId');
+const urlPreview  = document.getElementById('url-preview');
+const venueNameEl = document.getElementById('venueName');
+
+// Auto-generate venueId from venueName
+venueNameEl.oninput = () => {
+  const slug = venueNameEl.value.toLowerCase()
+    .replace(/[^a-z0-9\s-]/g,'').replace(/\s+/g,'-').replace(/-+/g,'-').slice(0,30);
+  venueIdEl.value = slug;
+  urlPreview.textContent = '/venues/' + (slug||'…');
+};
+venueIdEl.oninput = () => {
+  const clean = venueIdEl.value.toLowerCase().replace(/[^a-z0-9-]/g,'');
+  venueIdEl.value = clean;
+  urlPreview.textContent = '/venues/' + (clean||'…');
+};
+
+document.getElementById('signup-form').onsubmit = async (e) => {
+  e.preventDefault();
+  const errorEl  = document.getElementById('error');
+  const successEl= document.getElementById('success');
+  const btn      = document.getElementById('submit-btn');
+  errorEl.style.display='none';
+
+  const password = document.getElementById('password').value;
+  const confirm  = document.getElementById('confirm').value;
+  if (password.length < 8) { errorEl.textContent='Password must be at least 8 characters.'; errorEl.style.display='block'; return; }
+  if (password !== confirm) { errorEl.textContent='Passwords do not match.'; errorEl.style.display='block'; return; }
+
+  btn.disabled = true;
+  btn.textContent = 'Registering…';
+
+  try {
+    const res = await fetch('/api/venue/signup', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        venueName:   document.getElementById('venueName').value,
+        venueId:     document.getElementById('venueId').value,
+        email:       document.getElementById('email').value,
+        password,
+        venueType:   document.getElementById('venueType').value,
+        city:        document.getElementById('city').value,
+        country:     document.getElementById('country').value,
+        description: document.getElementById('description').value,
+      })
+    });
+    const data = await res.json();
+    if (!res.ok) { errorEl.textContent = data.error || 'Registration failed.'; errorEl.style.display='block'; btn.disabled=false; btn.textContent='Register Venue →'; return; }
+
+    // Store token and redirect to admin
+    localStorage.setItem('ct_venue_token', data.token);
+    localStorage.setItem('ct_venue_id',    data.venue.venue_id);
+    localStorage.setItem('ct_venue_name',  data.venue.venue_name);
+
+    document.getElementById('signup-form').style.display='none';
+    successEl.style.display='block';
+    setTimeout(() => { window.location.href = '/admin'; }, 2000);
+  } catch(err) {
+    errorEl.textContent = 'Network error — please try again.';
+    errorEl.style.display = 'block';
+    btn.disabled=false; btn.textContent='Register Venue →';
+  }
+};
+</script>
+</body>
+</html>

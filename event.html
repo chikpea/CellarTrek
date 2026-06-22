@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<meta property="og:type" content="website"/>
+<meta property="og:title" id="og-title" content="You're invited"/>
+<meta property="og:description" id="og-desc" content="RSVP to this wine event on CellarTrek"/>
+<title id="page-title">You're invited — CellarTrek</title>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=Montserrat:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --wine:#8b2240;--gold:#d4a84c;--gold-dim:rgba(212,168,76,.35);--gold-faint:rgba(212,168,76,.12);
+  --cream:#f5ede0;--cream-dim:rgba(245,237,224,.7);--cream-faint:rgba(245,237,224,.4);
+  --bg:#2a1520;--bg-card:rgba(50,20,28,.95);--border:rgba(220,160,80,.25);
+  --sans:'Montserrat',system-ui,sans-serif;--serif:'Cormorant Garamond',Georgia,serif;
+}
+body{font-family:var(--sans);background:var(--bg);color:var(--cream);min-height:100vh;display:flex;flex-direction:column;align-items:center;padding:40px 20px}
+.card{width:100%;max-width:480px}
+.inv-card{border-radius:10px;padding:28px 26px;position:relative;overflow:hidden;margin-bottom:24px}
+.inv-card .top-bar,.inv-card .bot-bar{position:absolute;left:0;right:0;height:3px}
+.inv-card .top-bar{top:0}
+.inv-card .bot-bar{bottom:0;opacity:.4}
+.eyebrow{font-size:10px;letter-spacing:.18em;text-transform:uppercase;margin-bottom:10px}
+.event-title{font-size:28px;font-weight:400;font-family:var(--serif);line-height:1.3;margin-bottom:8px}
+.event-meta{font-size:13px;opacity:.7;margin-bottom:4px}
+.quote{padding:12px 14px;border-radius:0 6px 6px 0;margin:16px 0;border-left-width:2px;border-left-style:solid}
+.quote p{font-size:12.5px;opacity:.85;font-family:var(--serif);line-height:1.75;font-style:italic}
+.ev-desc{font-size:12px;opacity:.55;line-height:1.7;text-align:center;margin-bottom:16px}
+.rsvp-section{background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:10px;padding:22px;margin-bottom:20px}
+.rsvp-title{font-size:13px;font-weight:600;color:var(--cream);margin-bottom:14px}
+.rsvp-row{display:flex;gap:8px;margin-bottom:12px}
+.btn-rsvp{flex:1;padding:12px 8px;border-radius:8px;border:1px solid var(--border);background:none;color:var(--cream-dim);font-size:12px;font-family:var(--sans);cursor:pointer;transition:all .15s;font-weight:500}
+.btn-rsvp:hover{border-color:var(--gold-dim);color:var(--cream)}
+.btn-rsvp.active{border-color:var(--gold);background:var(--gold-faint);color:var(--gold)}
+.inp{width:100%;background:rgba(255,255,255,.08);border:1px solid var(--border);color:var(--cream);padding:11px 14px;font-size:13px;border-radius:6px;outline:none;font-family:var(--sans);margin-bottom:10px}
+.inp:focus{border-color:var(--gold)}
+.inp::placeholder{color:var(--cream-faint)}
+.btn-submit{width:100%;padding:13px;background:var(--wine);color:var(--cream);border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;font-family:var(--sans);transition:background .2s}
+.btn-submit:hover{background:#a82850}
+.btn-submit:disabled{opacity:.6;cursor:not-allowed}
+.success{text-align:center;padding:20px}
+.success .big{font-size:42px;margin-bottom:12px}
+.success h2{font-family:var(--serif);font-size:24px;font-weight:300;margin-bottom:8px}
+.success p{font-size:13px;opacity:.6;line-height:1.7}
+.error-msg{font-size:12px;color:#e09090;margin-bottom:10px;display:none}
+.loading{text-align:center;padding:60px;opacity:.5;font-size:13px}
+.spinner{width:32px;height:32px;border:2px solid var(--border);border-top-color:var(--gold);border-radius:50%;animation:spin .8s linear infinite;margin:0 auto 16px}
+@keyframes spin{to{transform:rotate(360deg)}}
+.footer{font-size:11px;color:var(--cream-faint);text-align:center;margin-top:24px}
+.footer a{color:var(--gold);text-decoration:none}
+</style>
+</head>
+<body>
+<div class="card">
+  <div id="loading" class="loading"><div class="spinner"></div>Loading invitation…</div>
+  <div id="main" style="display:none">
+    <div class="inv-card" id="inv-card">
+      <div class="top-bar" id="top-bar"></div>
+      <div class="bot-bar" id="bot-bar"></div>
+      <div class="eyebrow" id="eyebrow">You are cordially invited</div>
+      <div class="event-title" id="event-title"></div>
+      <div class="event-meta" id="event-date"></div>
+      <div class="event-meta" id="event-venue"></div>
+      <div class="quote" id="quote-block" style="display:none">
+        <p id="quote-text"></p>
+      </div>
+      <div class="ev-desc" id="ev-desc" style="display:none"></div>
+      <div style="text-align:center;padding-top:14px;border-top:1px solid rgba(245,237,224,.1);margin-top:8px">
+        <div class="eyebrow" style="margin-bottom:0">RSVP below</div>
+      </div>
+    </div>
+
+    <div class="rsvp-section" id="rsvp-form">
+      <div class="rsvp-title">Will you attend?</div>
+      <div class="rsvp-row">
+        <button class="btn-rsvp" data-rsvp="yes" onclick="selectRsvp('yes')">✓ Going</button>
+        <button class="btn-rsvp" data-rsvp="maybe" onclick="selectRsvp('maybe')">? Maybe</button>
+        <button class="btn-rsvp" data-rsvp="no" onclick="selectRsvp('no')">✗ Can't make it</button>
+      </div>
+      <input class="inp" id="guest-name" placeholder="Your name" required/>
+      <input class="inp" id="guest-email" type="email" placeholder="Email (optional)"/>
+      <div class="error-msg" id="err-msg"></div>
+      <button class="btn-submit" id="rsvp-btn" onclick="submitRsvp()">Send RSVP</button>
+    </div>
+
+    <div id="rsvp-success" style="display:none" class="rsvp-section">
+      <div class="success">
+        <div class="big" id="success-icon">🎉</div>
+        <h2 id="success-title">See you there!</h2>
+        <p id="success-msg">Your RSVP has been received.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="footer">
+    Powered by <a href="/">CellarTrek</a> · Wine collection &amp; events
+  </div>
+</div>
+
+<script>
+const token = location.pathname.split('/event/')[1]?.split('/')[0];
+let selectedRsvp = null;
+let eventData = null;
+
+const STYLES = {
+  classic: { bg:'#2a150e', border:'#c8a04c', accent:'#c8a04c', bodyFont:'Georgia,serif', bg2:'rgba(200,160,76,.08)' },
+  modern:  { bg:'#0e1420', border:'#3a7bd4', accent:'#3a7bd4', bodyFont:"'Montserrat',sans-serif", bg2:'rgba(58,123,212,.08)' },
+  rustic:  { bg:'#1a130a', border:'#7a5c3a', accent:'#b87c42', bodyFont:'Georgia,serif', bg2:'rgba(122,92,58,.12)' },
+};
+
+function detectStyle(invDesign) {
+  if (!invDesign) return 'classic';
+  const d = invDesign.toLowerCase();
+  if (d.includes('modern') || d.includes('minimal') || d.includes('clean')) return 'modern';
+  if (d.includes('rustic') || d.includes('earthy') || d.includes('warm')) return 'rustic';
+  return 'classic';
+}
+
+async function loadEvent() {
+  if (!token) { document.getElementById('loading').textContent = 'Invalid invitation link.'; return; }
+  try {
+    const res = await fetch('/api/social/events/public/' + token);
+    if (!res.ok) throw new Error('Event not found');
+    eventData = await res.json();
+    renderEvent(eventData);
+  } catch(e) {
+    document.getElementById('loading').textContent = 'This invitation link is no longer available.';
+  }
+}
+
+function renderEvent(ev) {
+  const style = detectStyle(ev.invitation_design);
+  const st = STYLES[style];
+
+  const card = document.getElementById('inv-card');
+  card.style.background = st.bg;
+  card.style.border = '1.5px solid ' + st.accent;
+  document.getElementById('top-bar').style.background = st.accent;
+  document.getElementById('bot-bar').style.background = st.accent;
+  document.getElementById('eyebrow').style.color = st.accent;
+
+  document.getElementById('event-title').textContent = ev.title;
+  document.title = ev.title + ' — CellarTrek';
+  document.getElementById('og-title').setAttribute('content', ev.title);
+
+  if (ev.event_date) {
+    const d = new Date(ev.event_date);
+    document.getElementById('event-date').textContent = '📅 ' + d.toLocaleDateString('en-US', {weekday:'long',month:'long',day:'numeric',year:'numeric'});
+  }
+  if (ev.venue_name) document.getElementById('event-venue').textContent = '📍 ' + ev.venue_name + (ev.venue_address ? ', ' + ev.venue_address : '');
+
+  if (ev.invitation_text) {
+    const qb = document.getElementById('quote-block');
+    qb.style.display = 'block';
+    qb.style.background = st.bg2;
+    qb.style.borderLeftColor = st.accent;
+    document.getElementById('quote-text').style.fontFamily = st.bodyFont;
+    document.getElementById('quote-text').textContent = '"' + ev.invitation_text + '"';
+  }
+
+  if (ev.description) {
+    const desc = document.getElementById('ev-desc');
+    desc.style.display = 'block';
+    desc.textContent = ev.description;
+  }
+
+  document.getElementById('loading').style.display = 'none';
+  document.getElementById('main').style.display = 'block';
+}
+
+function selectRsvp(val) {
+  selectedRsvp = val;
+  document.querySelectorAll('.btn-rsvp').forEach(b => {
+    b.classList.toggle('active', b.dataset.rsvp === val);
+  });
+  const successMap = { yes:'🎉', maybe:'🤔', no:'😔' };
+  const titleMap = { yes:'See you there!', maybe:'We hope you can make it!', no:'Thanks for letting us know' };
+  const msgMap = { yes:'Your RSVP has been received. We look forward to seeing you.', maybe:'Your response has been recorded.', no:'Thank you for letting the host know.' };
+  document.getElementById('success-icon').textContent = successMap[val];
+  document.getElementById('success-title').textContent = titleMap[val];
+  document.getElementById('success-msg').textContent = msgMap[val];
+}
+
+async function submitRsvp() {
+  const name = document.getElementById('guest-name').value.trim();
+  const email = document.getElementById('guest-email').value.trim();
+  const errEl = document.getElementById('err-msg');
+  errEl.style.display = 'none';
+
+  if (!selectedRsvp) { errEl.textContent = 'Please select your attendance.'; errEl.style.display = 'block'; return; }
+  if (!name) { errEl.textContent = 'Please enter your name.'; errEl.style.display = 'block'; return; }
+
+  const btn = document.getElementById('rsvp-btn');
+  btn.disabled = true; btn.textContent = 'Sending…';
+
+  try {
+    await fetch('/api/social/events/public/' + token + '/rsvp', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ rsvp: selectedRsvp, guestName: name, guestEmail: email }),
+    });
+    document.getElementById('rsvp-form').style.display = 'none';
+    document.getElementById('rsvp-success').style.display = 'block';
+  } catch(e) {
+    errEl.textContent = 'Could not send RSVP. Please try again.';
+    errEl.style.display = 'block';
+    btn.disabled = false; btn.textContent = 'Send RSVP';
+  }
+}
+
+loadEvent();
+</script>
+</body>
+</html>

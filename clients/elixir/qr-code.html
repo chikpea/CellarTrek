@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8" />
+<title>Elixir Wine Lounge — Add Us to Your Trek</title>
+<style>
+  body{margin:0;display:flex;align-items:center;justify-content:center;min-height:100vh;background:#1a2a20;font-family:Georgia,serif}
+  .card{background:#1f3328;border:2px solid #c8a84b;border-radius:16px;padding:40px;text-align:center;max-width:360px}
+  h1{color:#f7f1e6;font-size:22px;margin:0 0 6px}
+  p{color:#c8a84b;font-size:13px;letter-spacing:.05em;text-transform:uppercase;margin:0 0 24px}
+  img{width:260px;height:260px;border-radius:8px;background:#fff;padding:12px}
+  .footer{color:#f7f1e680;font-size:11px;margin-top:20px}
+</style>
+</head>
+<body>
+  <div class="card">
+    <h1>Elixir Wine Lounge</h1>
+    <p>Add us to your Trek</p>
+    <img id="qr-img" alt="Scan to join Elixir Wine Lounge on CellarTrek" />
+    <div class="footer">Scan with the CellarTrek app, or any camera</div>
+  </div>
+  <script>
+    // Build the join URL from wherever this page is actually being served —
+    // works on localhost, a LAN IP, or a real production domain with no edits.
+    var joinUrl = window.location.protocol + "//" + window.location.host + "/join?v=elixir";
+    document.getElementById("qr-img").src =
+      "https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=" + encodeURIComponent(joinUrl);
+  </script>
+</body>
+</html>

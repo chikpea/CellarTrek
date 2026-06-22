@@ -1,0 +1,19 @@
+{
+  "name": "cellartrek",
+  "version": "14.0.0",
+  "description": "CellarTrek — Wine cellar & venue platform",
+  "main": "server_production.js",
+  "scripts": {
+    "start": "node server_production.js",
+    "prod": "NODE_ENV=production node server_production.js"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "bcrypt": "^6.0.0",
+    "dotenv": "^17.4.2",
+    "jsonwebtoken": "^9.0.3",
+    "pg": "^8.22.0"
+  }
+}

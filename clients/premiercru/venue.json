@@ -1,0 +1,35 @@
+{
+  "id":             "premiercru",
+  "name":           "Premier Cru",
+  "logoUrl":        "clients/premiercru/logo.png",
+  "address":        "15 High Street, Sai Ying Pun, Hong Kong",
+  "phone":          "+852 9541 0003",
+  "email":          "theshop@premiercruhk.com",
+  "hours":          "Tue–Thu 2pm–10pm · Fri–Sat 2pm–11pm · Sun 2pm–10pm · Mon Closed",
+  "welcomeMessage": "Welcome to Premier Cru — your French wine library in Sai Ying Pun. We've added our current French regional selections to your Journey. Burgundy, Champagne, and the Rhône Valley are the heart of our collection.",
+  "ctaLabel":       "Shop Our Collection",
+  "ctaUrl":         "https://www.premiercruhk.com/shop",
+  "wines": [
+    {
+      "id": 9201, "name": "Puchang Muscat", "vintage": 2018,
+      "region": "Xinjiang, China", "grapes": ["Muscat"],
+      "rating": 91, "bc": "#7a1f35", "lc": "#d4a84c",
+      "mode": "cellar", "tradeable": false,
+      "notes": "Organic wine from the Gobi Desert terroir — Premier Cru exclusive"
+    },
+    {
+      "id": 9202, "name": "Puchang Beichun", "vintage": 2018,
+      "region": "Xinjiang, China", "grapes": ["Beichun"],
+      "rating": 89, "bc": "#5a1428", "lc": "#c8a030",
+      "mode": "cellar", "tradeable": false,
+      "notes": "Rare indigenous varietal — Premier Cru exclusive"
+    },
+    {
+      "id": 9203, "name": "Puchang Saperavi", "vintage": 2017,
+      "region": "Xinjiang, China", "grapes": ["Saperavi"],
+      "rating": 90, "bc": "#3a1020", "lc": "#8a7040",
+      "mode": "cellar", "tradeable": false,
+      "notes": "Deep, structured red — Premier Cru exclusive"
+    }
+  ]
+}

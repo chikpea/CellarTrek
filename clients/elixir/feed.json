@@ -1,0 +1,29 @@
+[
+  {
+    "id": "evt001",
+    "type": "event",
+    "title": "Burgundy Masterclass — Thursday June 26",
+    "body": "Join our head sommelier for an exclusive vertical tasting of Domaine Leroy spanning 2015–2020. Limited to 12 guests. Paired dinner included.",
+    "ctaLabel": "Reserve Your Seat ($185/person)",
+    "ctaUrl": "https://elixirwinelounge.com/events/burgundy-masterclass",
+    "publishedAt": "June 18, 2026"
+  },
+  {
+    "id": "promo001",
+    "type": "promotion",
+    "title": "Summer Allocation: Screaming Eagle 2022",
+    "body": "We've secured a small allocation of Screaming Eagle 2022. Select members have first access before public offering. Limit 1 bottle per member.",
+    "ctaLabel": "Request Your Bottle",
+    "ctaUrl": "https://elixirwinelounge.com/allocations",
+    "publishedAt": "June 17, 2026"
+  },
+  {
+    "id": "arrival001",
+    "type": "arrival",
+    "title": "New Arrival: Sassicaia 2021",
+    "body": "The 2021 Sassicaia has arrived and it's exceptional — potentially the wine of the vintage. Now available by the bottle and by the glass on Fridays.",
+    "ctaLabel": null,
+    "ctaUrl": null,
+    "publishedAt": "June 15, 2026"
+  }
+]
