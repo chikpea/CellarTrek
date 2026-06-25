@@ -388,3 +388,104 @@ DO $$ BEGIN
     ALTER TABLE wine_inventory ADD CONSTRAINT wine_inventory_wine_id_ml_key UNIQUE (wine_id, ml);
   END IF;
 END $$;
+
+-- ── WINE EDUCATION ───────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS education_progress (
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id         UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    path_id         VARCHAR(100) NOT NULL,
+    topic_id        VARCHAR(200) NOT NULL,
+    completed       BOOLEAN DEFAULT false,
+    quiz_score      INTEGER,
+    quiz_attempts   INTEGER DEFAULT 0,
+    last_seen_at    TIMESTAMPTZ DEFAULT NOW(),
+    created_at      TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE(user_id, path_id, topic_id)
+);
+CREATE INDEX IF NOT EXISTS idx_edu_progress_user ON education_progress(user_id);
+
+CREATE TABLE IF NOT EXISTS education_content (
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    path_id         VARCHAR(100) NOT NULL,
+    topic_id        VARCHAR(200) NOT NULL,
+    content_type    VARCHAR(20) NOT NULL, -- lesson | flashcards | quiz
+    content_json    JSONB NOT NULL,
+    generated_at    TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE(path_id, topic_id, content_type)
+);
+CREATE INDEX IF NOT EXISTS idx_edu_content_lookup ON education_content(path_id, topic_id, content_type);
+
+-- ── WINE CATALOG ─────────────────────────────────────────────────
+-- Organically growing shared wine database.
+-- Only populated by trusted AI enrichment events, never raw user input.
+-- Every enrichment (label scan, AI lookup, venue upload) contributes here.
+
+CREATE TABLE IF NOT EXISTS wine_catalog (
+    id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    -- Identity (canonical, normalised by Claude)
+    canonical_name      VARCHAR(500) NOT NULL,   -- e.g. "Château Margaux"
+    producer            VARCHAR(500),
+    vintage_year        INTEGER,
+    region              VARCHAR(500),
+    country             VARCHAR(100),
+    grapes              TEXT[],
+    style               VARCHAR(50),             -- Red | White | Rosé | Sparkling | Fortified
+    -- AI-generated content
+    story               TEXT,
+    aromas              TEXT[],
+    flavors             TEXT[],
+    body                VARCHAR(50),
+    finish              VARCHAR(50),
+    food_pairings       TEXT[],
+    drink_window_from   INTEGER,                 -- year
+    drink_window_to     INTEGER,
+    -- Catalog confidence
+    source_count        INTEGER DEFAULT 1,       -- independent enrichment events
+    confidence_score    INTEGER DEFAULT 20,      -- 0-100, increases with each source
+    -- Media
+    label_img_url       TEXT,
+    -- Timestamps
+    last_enriched_at    TIMESTAMPTZ DEFAULT NOW(),
+    created_at          TIMESTAMPTZ DEFAULT NOW(),
+    -- Deduplication: canonical key
+    UNIQUE(canonical_name, vintage_year)
+);
+
+CREATE INDEX IF NOT EXISTS idx_catalog_name    ON wine_catalog(canonical_name);
+CREATE INDEX IF NOT EXISTS idx_catalog_country ON wine_catalog(country);
+CREATE INDEX IF NOT EXISTS idx_catalog_conf    ON wine_catalog(confidence_score DESC);
+
+-- Tracks which events contributed to each catalog entry
+CREATE TABLE IF NOT EXISTS wine_catalog_sources (
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    catalog_id      UUID NOT NULL REFERENCES wine_catalog(id) ON DELETE CASCADE,
+    source_type     VARCHAR(20) NOT NULL, -- 'label_scan' | 'ai_enrich' | 'venue_upload' | 'csv_import'
+    source_user_id  UUID REFERENCES users(id) ON DELETE SET NULL,
+    source_venue_id VARCHAR(100) REFERENCES venue_accounts(venue_id) ON DELETE SET NULL,
+    created_at      TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_catalog_sources ON wine_catalog_sources(catalog_id);
+
+-- ── SUPER-ADMIN ───────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS admin_users (
+    id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    email         VARCHAR(255) UNIQUE NOT NULL,
+    password_hash TEXT NOT NULL,
+    name          VARCHAR(255),
+    created_at    TIMESTAMPTZ DEFAULT NOW(),
+    last_login_at TIMESTAMPTZ
+);
+
+-- API usage log — written after every AI call, used for cost tracking
+CREATE TABLE IF NOT EXISTS api_usage_log (
+    id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id      UUID REFERENCES users(id) ON DELETE SET NULL,
+    endpoint     VARCHAR(50) NOT NULL,  -- sommelier|enrich|education|explore|label_scan
+    input_tokens  INTEGER DEFAULT 0,
+    output_tokens INTEGER DEFAULT 0,
+    est_cost_usd  NUMERIC(10,6) DEFAULT 0,
+    created_at   TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_api_usage_user    ON api_usage_log(user_id);
+CREATE INDEX IF NOT EXISTS idx_api_usage_created ON api_usage_log(created_at DESC);

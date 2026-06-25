@@ -16,9 +16,7 @@
  */
 
 'use strict';
-require('dotenv').config();  // Load .env variables into process.env
-
-console.log("The database connection string is:", process.env.DATABASE_URL);
+require('dotenv').config();  // Load .env file if present
 const http    = require('http');
 const https   = require('https');
 const fs      = require('fs');
@@ -34,7 +32,12 @@ const jwt            = require('jsonwebtoken');
 // ── Configuration ────────────────────────────────────────────────
 const PORT      = process.env.PORT      || 8081;
 const HTML_FILE = 'cellartrek_v12.html';
-const JWT_SECRET     = process.env.JWT_SECRET     || 'dev-secret-change-in-production';
+const JWT_SECRET     = process.env.JWT_SECRET;
+if (!JWT_SECRET) {
+  console.error('FATAL: JWT_SECRET environment variable is not set. Refusing to start.');
+  console.error('Run: export JWT_SECRET=$(openssl rand -hex 32)');
+  process.exit(1);
+}
 const API_KEY        = process.env.ANTHROPIC_API_KEY;
 const PAYPAL_BASE    = process.env.NODE_ENV === 'production'
   ? 'https://api-m.paypal.com'
@@ -64,7 +67,7 @@ const MIME = {
  *   postgresql://wj_app:wine123@your-rds-endpoint.amazonaws.com:5432/cellartrek
  */
 const db = new Pool({
-  connectionString: process.env.DATABASE_URL || 'postgresql://user_app:PASS@localhost:5432/cellartrek',
+  connectionString: process.env.DATABASE_URL || 'postgresql://wj_app:wine123@localhost:5432/cellartrek',
   ssl: process.env.NODE_ENV === 'production'
     ? { rejectUnauthorized: true }  // Enforce SSL certificate in production
     : false,                        // No SSL for local development
@@ -149,10 +152,22 @@ async function deleteLabelPhoto(labelUrl) {
 // ════════════════════════════════════════════════════════════════
 
 // Parse JSON request body
+const MAX_BODY = 20 * 1024 * 1024; // 20MB — allows base64 label photos (~5MB image → ~7MB base64)
+
 function parseBody(req, cb) {
   let body = '';
-  req.on('data', chunk => body += chunk);
+  let aborted = false;
+  req.on('data', chunk => {
+    if (aborted) return;
+    body += chunk;
+    if (body.length > MAX_BODY) {
+      aborted = true;
+      req.destroy();
+      cb(new Error('Payload too large'), null);
+    }
+  });
   req.on('end', () => {
+    if (aborted) return;
     try { cb(null, JSON.parse(body)); }
     catch(e) { cb(new Error('Invalid JSON'), null); }
   });
@@ -202,11 +217,17 @@ function serveJsonFile(filePath, res) {
 // ════════════════════════════════════════════════════════════════
 
 // ── POST /api/auth/signup ────────────────────────────────────────
+
+// ══════════════════════════════════════════════════════════════
+// ── (1) USER AUTH ──────────────────────────────────────────
+// ══════════════════════════════════════════════════════════════
+
 async function handleSignup(req, res) {
   parseBody(req, async (e, body) => {
     if (e) return err(res, 400, 'Invalid request');
     const { email, password, name, lang } = body;
     if (!email || !password) return err(res, 400, 'Email and password required');
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return err(res, 400, 'Invalid email address');
     if (password.length < 8)  return err(res, 400, 'Password must be at least 8 characters');
 
     try {
@@ -305,7 +326,7 @@ async function handleForgotPassword(req, res) {
       );
 
       const resetUrl = `${req.headers.origin || ''}/reset-password.html?token=${token}&type=user`;
-      console.log(`[password reset] user ${user.email} → ${resetUrl}`);
+      console.log(`[password reset] requested for ${user.email}`);
 
       json(res, 200, {
         ok: true,
@@ -361,6 +382,11 @@ async function handleResetPassword(req, res) {
 }
 
 // ── GET /api/user/profile ────────────────────────────────────────
+
+// ══════════════════════════════════════════════════════════════
+// ── (2) USER PROFILE ───────────────────────────────────────
+// ══════════════════════════════════════════════════════════════
+
 async function handleProfile(req, res) {
   const session = authenticate(req);
   if (!session) return err(res, 401, 'Unauthorized');
@@ -419,6 +445,21 @@ async function handleUpdateProfile(req, res) {
   });
 }
 
+
+// ── DELETE /api/user ─────────────────────────────────────────────
+async function handleDeleteUser(req, res) {
+  const session = authenticate(req);
+  if (!session) return err(res, 401, 'Unauthorized');
+
+  try {
+    // Cascade deletes wines, inventory, memberships, requests, reviews
+    await db.query('DELETE FROM users WHERE id=$1', [session.userId]);
+    json(res, 200, { ok: true, message: 'Account deleted' });
+  } catch(e) {
+    err(res, 500, 'Server error');
+  }
+}
+
 // ── GET /api/users/:id/public ────────────────────────────────────
 // Public profile view — no auth required, but respects profile_public flag.
 // Never exposes email, password_hash, or any other sensitive field.
@@ -454,6 +495,11 @@ async function handlePublicProfile(req, res, userId) {
 // ════════════════════════════════════════════════════════════════
 
 // ── GET /api/social/friends ───────────────────────────────────────
+
+// ══════════════════════════════════════════════════════════════
+// ── (3) SOCIAL — FRIENDS ────────────────────────────────────
+// ══════════════════════════════════════════════════════════════
+
 async function handleGetFriends(req, res) {
   const session = authenticate(req);
   if (!session) return err(res, 401, 'Unauthorized');
@@ -520,6 +566,11 @@ async function handleFriendAction(req, res, friendshipId) {
 }
 
 // ── GET /api/social/groups ────────────────────────────────────────
+
+// ══════════════════════════════════════════════════════════════
+// ── (4) SOCIAL — GROUPS ─────────────────────────────────────
+// ══════════════════════════════════════════════════════════════
+
 async function handleGetGroups(req, res) {
   const session = authenticate(req);
   if (!session) return err(res, 401, 'Unauthorized');
@@ -604,6 +655,7 @@ async function handleGetGroupEvents(req, res, groupId) {
   try {
     const result = await db.query(
       `SELECT ge.*,
+              ge.created_by AS created_by,
               u.name AS creator_name,
               COUNT(DISTINCT ei.id) AS invite_count,
               COUNT(DISTINCT CASE WHEN ei.rsvp='yes' THEN ei.id END) AS yes_count,
@@ -623,6 +675,11 @@ async function handleGetGroupEvents(req, res, groupId) {
 
 // ── GET /api/social/events/:id/guests ────────────────────────────
 // Returns full guest list for print production (name cards etc.)
+
+// ══════════════════════════════════════════════════════════════
+// ── (5) SOCIAL — EVENTS ─────────────────────────────────────
+// ══════════════════════════════════════════════════════════════
+
 async function handleGetEventGuests(req, res, eventId) {
   const session = authenticate(req);
   if (!session) return err(res, 401, 'Unauthorized');
@@ -791,6 +848,11 @@ async function handlePublicEventRsvp(req, res, token) {
 }
 
 // ── GET /api/social/groups/:id/trips ─────────────────────────────
+
+// ══════════════════════════════════════════════════════════════
+// ── (6) SOCIAL — TRIPS ──────────────────────────────────────
+// ══════════════════════════════════════════════════════════════
+
 async function handleGetTrips(req, res, groupId) {
   const session = authenticate(req);
   if (!session) return err(res, 401, 'Unauthorized');
@@ -860,6 +922,11 @@ async function handleTripRSVP(req, res, tripId) {
 
 // ── GET /api/shop/items ───────────────────────────────────────────
 // Public browse — no auth required. Supports ?category=wine&featured=true
+
+// ══════════════════════════════════════════════════════════════
+// ── (7) SHOP ────────────────────────────────────────────────
+// ══════════════════════════════════════════════════════════════
+
 async function handleGetShopItems(req, res) {
   try {
     const params = new URLSearchParams(req.url.split('?')[1] || '');
@@ -925,7 +992,10 @@ async function handlePlaceOrder(req, res) {
       if (!itemRes.rows.length) return err(res, 404, 'Item not found or unavailable');
       const item = itemRes.rows[0];
 
-      const quantity = parseInt(qty) || 1;
+      // Stock check — reject if item has a quantity and it's exhausted
+      const quantity = Math.max(1, parseInt(qty) || 1);
+      if (item.stock_qty !== null && item.stock_qty < quantity)
+        return err(res, 409, 'Insufficient stock');
       const total = (item.price || 0) * quantity;
       const commission = total * (item.commission_pct || 10) / 100;
 
@@ -977,6 +1047,100 @@ async function handleGetMyOrders(req, res) {
 
 // ── POST /api/venue/signup ────────────────────────────────────────
 // Public self-serve venue registration — no auth required
+// ── POST /api/paypal/webhook ─────────────────────────────────────
+
+// ══════════════════════════════════════════════════════════════
+// ── (8) WEBHOOKS ─────────────────────────────────────────────
+// ══════════════════════════════════════════════════════════════
+
+async function handlePayPalWebhook(req, res) {
+  parseBody(req, async (e, event) => {
+    if (e) return err(res, 400, 'Invalid webhook');
+
+    try {
+      if (event.event_type === 'BILLING.SUBSCRIPTION.ACTIVATED') {
+        const { id: subId, custom_id: userId } = event.resource;
+        // Determine plan from PayPal plan ID
+        const planId = event.resource.plan_id;
+        const plan = planId === process.env.PAYPAL_EXCLUSIVE_PLAN_ID ? 'exclusive' : 'premium';
+        const amount = plan === 'exclusive' ? 10.00 : 4.25;
+
+        const client = await db.connect();
+        try {
+          await client.query('BEGIN');
+          await client.query(
+            `UPDATE users SET plan=$1, plan_expires_at=NOW()+INTERVAL '1 month',
+             paypal_subscription_id=$2 WHERE id=$3`,
+            [plan, subId, userId]
+          );
+          await client.query(
+            `INSERT INTO subscriptions (user_id, paypal_subscription_id, plan, status, amount_usd, started_at)
+             VALUES ($1,$2,$3,'active',$4,NOW())`,
+            [userId, subId, plan, amount]
+          );
+          await client.query(
+            `INSERT INTO payment_events (user_id, event_type, amount_usd, paypal_event_id)
+             VALUES ($1,'subscription.activated',$2,$3)`,
+            [userId, amount, event.id]
+          );
+          await client.query('COMMIT');
+        } catch(e) {
+          await client.query('ROLLBACK');
+          throw e;
+        } finally {
+          client.release();
+        }
+      }
+
+      if (event.event_type === 'BILLING.SUBSCRIPTION.CANCELLED') {
+        const subId = event.resource.id;
+        await db.query(
+          "UPDATE users SET plan='free', plan_expires_at=NULL WHERE paypal_subscription_id=$1",
+          [subId]
+        );
+        await db.query(
+          "UPDATE subscriptions SET status='cancelled' WHERE paypal_subscription_id=$1",
+          [subId]
+        );
+      }
+
+      if (event.event_type === 'PAYMENT.SALE.COMPLETED') {
+        // Monthly recurring payment — record for QuickBooks sync
+        const subId = event.resource.billing_agreement_id;
+        const result = await db.query(
+          'SELECT user_id, plan, amount_usd FROM subscriptions WHERE paypal_subscription_id=$1',
+          [subId]
+        );
+        if (result.rows.length) {
+          const sub = result.rows[0];
+          await db.query(
+            `INSERT INTO payment_events (user_id, subscription_id, event_type, amount_usd, paypal_event_id)
+             SELECT id, $1, 'payment.completed', $2, $3 FROM subscriptions WHERE paypal_subscription_id=$4`,
+            [sub.id, sub.amount_usd, event.id, subId]
+          );
+          // Extend plan by 1 month
+          await db.query(
+            "UPDATE users SET plan_expires_at=GREATEST(plan_expires_at,NOW())+INTERVAL '1 month' WHERE paypal_subscription_id=$1",
+            [subId]
+          );
+        }
+      }
+
+      res.writeHead(200);
+      res.end('OK');
+    } catch(e) {
+      console.error('PayPal webhook error:', e.message);
+      res.writeHead(500);
+      res.end('Error');
+    }
+  });
+}
+
+
+// ══════════════════════════════════════════════════════════════
+// ── (9) VENUE SETUP & CONSUMER ──────────────────────────────
+// ══════════════════════════════════════════════════════════════
+
 async function handleVenueSignup(req, res) {
   parseBody(req, async (e, body) => {
     if (e) return err(res, 400, 'Invalid request');
@@ -1250,21 +1414,154 @@ async function handleVenueUpdateOrder(req, res, orderId) {
   });
 }
 
-// ── DELETE /api/user ─────────────────────────────────────────────
-async function handleDeleteUser(req, res) {
-  const session = authenticate(req);
-  if (!session) return err(res, 401, 'Unauthorized');
+// ── GET /api/wines ───────────────────────────────────────────────
+
+// ══════════════════════════════════════════════════════════════
+// ── (10) WINES ──────────────────────────────────────────────
+
+// ════════════════════════════════════════════════════════════════
+// WINE CATALOG
+// Organically growing shared database fed exclusively by AI
+// enrichment events — never raw user input.
+// Sources: label scans, AI lookups, venue uploads, CSV imports.
+// ════════════════════════════════════════════════════════════════
+
+// Confidence points awarded per source type
+const CATALOG_CONFIDENCE = {
+  label_scan:   30,  // Claude vision — high quality structured output
+  venue_upload: 40,  // Venue-provided data — professionally managed
+  csv_import:   25,  // AI-enriched CSV — good but bulk
+  ai_enrich:    20,  // User-triggered AI lookup — reliable
+};
+
+// ── Contribute an enrichment event to the catalog ────────────────
+// Called internally after every AI enrichment event.
+// Never exposed directly as a public endpoint.
+async function contributeToWineCatalog(enrichedData, sourceType, userId, venueId) {
+  const {
+    name, producer, vintage, region, country, grapes,
+    style, story, aromas, flavors, body, finish,
+    pairings, drinkWindowFrom, drinkWindowTo, labelImgUrl
+  } = enrichedData;
+
+  if (!name) return null; // Nothing to catalog without a name
+
+  const canonicalName = (name || '').trim();
+  const vintageYear   = vintage ? parseInt(vintage) : null;
+  const confidence    = CATALOG_CONFIDENCE[sourceType] || 20;
 
   try {
-    // Cascade deletes wines, inventory, memberships, requests, reviews
-    await db.query('DELETE FROM users WHERE id=$1', [session.userId]);
-    json(res, 200, { ok: true, message: 'Account deleted' });
+    // Upsert — increment confidence and source count on conflict
+    const result = await db.query(
+      `INSERT INTO wine_catalog
+         (canonical_name, producer, vintage_year, region, country, grapes,
+          style, story, aromas, flavors, body, finish, food_pairings,
+          drink_window_from, drink_window_to, label_img_url,
+          source_count, confidence_score, last_enriched_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,1,$17,NOW())
+       ON CONFLICT (canonical_name, vintage_year) DO UPDATE SET
+         producer         = COALESCE(EXCLUDED.producer,         wine_catalog.producer),
+         region           = COALESCE(EXCLUDED.region,           wine_catalog.region),
+         country          = COALESCE(EXCLUDED.country,          wine_catalog.country),
+         grapes           = CASE WHEN array_length(EXCLUDED.grapes,1) > 0
+                                 THEN EXCLUDED.grapes ELSE wine_catalog.grapes END,
+         style            = COALESCE(EXCLUDED.style,            wine_catalog.style),
+         story            = COALESCE(EXCLUDED.story,            wine_catalog.story),
+         aromas           = CASE WHEN array_length(EXCLUDED.aromas,1) > 0
+                                 THEN EXCLUDED.aromas ELSE wine_catalog.aromas END,
+         flavors          = CASE WHEN array_length(EXCLUDED.flavors,1) > 0
+                                 THEN EXCLUDED.flavors ELSE wine_catalog.flavors END,
+         body             = COALESCE(EXCLUDED.body,             wine_catalog.body),
+         finish           = COALESCE(EXCLUDED.finish,           wine_catalog.finish),
+         food_pairings    = CASE WHEN array_length(EXCLUDED.food_pairings,1) > 0
+                                 THEN EXCLUDED.food_pairings ELSE wine_catalog.food_pairings END,
+         drink_window_from= COALESCE(EXCLUDED.drink_window_from,wine_catalog.drink_window_from),
+         drink_window_to  = COALESCE(EXCLUDED.drink_window_to,  wine_catalog.drink_window_to),
+         label_img_url    = COALESCE(EXCLUDED.label_img_url,    wine_catalog.label_img_url),
+         source_count     = wine_catalog.source_count + 1,
+         confidence_score = LEAST(100, wine_catalog.confidence_score + $17),
+         last_enriched_at = NOW()
+       RETURNING id`,
+      [
+        canonicalName, producer||null, vintageYear, region||null, country||null,
+        grapes||[], style||null, story||null, aromas||[], flavors||[],
+        body||null, finish||null, pairings||[],
+        drinkWindowFrom||null, drinkWindowTo||null, labelImgUrl||null,
+        confidence
+      ]
+    );
+
+    const catalogId = result.rows[0]?.id;
+    if (!catalogId) return null;
+
+    // Record the source event
+    await db.query(
+      `INSERT INTO wine_catalog_sources (catalog_id, source_type, source_user_id, source_venue_id)
+       VALUES ($1,$2,$3,$4)`,
+      [catalogId, sourceType, userId||null, venueId||null]
+    );
+
+    return catalogId;
   } catch(e) {
-    err(res, 500, 'Server error');
+    // Catalog contribution is best-effort — never block the main flow
+    console.error('CatalogContribute:', e.message);
+    return null;
   }
 }
 
-// ── GET /api/wines ───────────────────────────────────────────────
+// ── GET /api/catalog/search?q=...&limit=10 ────────────────────────
+// Fast catalog lookup for label scan auto-complete and dedup check
+async function handleCatalogSearch(req, res) {
+  const session = authenticate(req);
+  if (!session) return err(res, 401, 'Unauthorized');
+  const params = new URL(req.url, 'http://localhost').searchParams;
+  const q      = (params.get('q') || '').trim();
+  const limit  = Math.min(20, parseInt(params.get('limit') || '10'));
+  if (!q || q.length < 2) return json(res, 200, []);
+  try {
+    const result = await db.query(
+      `SELECT id, canonical_name, producer, vintage_year, region, country,
+              grapes, style, aromas, flavors, body, finish, food_pairings,
+              drink_window_from, drink_window_to, confidence_score, source_count
+       FROM wine_catalog
+       WHERE canonical_name ILIKE $1 OR producer ILIKE $1
+       ORDER BY confidence_score DESC, source_count DESC
+       LIMIT $2`,
+      [`%${q}%`, limit]
+    );
+    json(res, 200, result.rows);
+  } catch(e) { console.error('CatalogSearch:', e.message); err(res, 500, 'Server error'); }
+}
+
+// ── GET /api/catalog/stats ────────────────────────────────────────
+// Returns catalog size and growth stats — used in admin/investor views
+async function handleCatalogStats(req, res) {
+  const session = authenticate(req);
+  if (!session) return err(res, 401, 'Unauthorized');
+  try {
+    const result = await db.query(
+      `SELECT
+         COUNT(*) AS total_wines,
+         COUNT(*) FILTER (WHERE confidence_score >= 60) AS high_confidence,
+         COUNT(*) FILTER (WHERE confidence_score >= 40) AS medium_confidence,
+         COUNT(DISTINCT country) AS countries,
+         COUNT(DISTINCT region) AS regions,
+         SUM(source_count) AS total_contributions,
+         MAX(last_enriched_at) AS last_updated,
+         COUNT(*) FILTER (WHERE created_at > NOW() - INTERVAL '30 days') AS added_last_30d
+       FROM wine_catalog`
+    );
+    const src = await db.query(
+      `SELECT source_type, COUNT(*) as count
+       FROM wine_catalog_sources GROUP BY source_type ORDER BY count DESC`
+    );
+    json(res, 200, { ...result.rows[0], sources: src.rows });
+  } catch(e) { console.error('CatalogStats:', e.message); err(res, 500, 'Server error'); }
+}
+
+
+// ══════════════════════════════════════════════════════════════
+
 async function handleGetWines(req, res) {
   const session = authenticate(req);
   if (!session) return err(res, 401, 'Unauthorized');
@@ -1557,7 +1854,9 @@ async function handleUpdateQty(req, res, wineId) {
   });
 }
 
-// ── DELETE /api/wines/:id ─────────────────────────────────────────
+
+
+// ── DELETE /api/wines/:id ────────────────────────────────────────
 async function handleDeleteWine(req, res, wineId) {
   const session = authenticate(req);
   if (!session) return err(res, 401, 'Unauthorized');
@@ -1584,8 +1883,7 @@ async function handleDeleteWine(req, res, wineId) {
   }
 }
 
-// ── POST /api/upload/label ────────────────────────────────────────
-// Upload a label photo independently (before wine is saved)
+// ── POST /api/upload/label ──────────────────────────────────────
 async function handleLabelUpload(req, res) {
   const session = authenticate(req);
   if (!session) return err(res, 401, 'Unauthorized');
@@ -1596,8 +1894,20 @@ async function handleLabelUpload(req, res) {
     if (!image) return err(res, 400, 'No image provided');
 
     try {
-      const tempId = wineId || crypto.randomUUID();
-      const url = await uploadLabelPhoto(session.userId, tempId, image);
+      const tempId  = wineId || crypto.randomUUID();
+      const url     = await uploadLabelPhoto(session.userId, tempId, image);
+
+      // If enrichedData is passed alongside the image, write to catalog
+      // (called after client-side Claude vision returns structured data)
+      if (body.enrichedData) {
+        contributeToWineCatalog(
+          { ...body.enrichedData, labelImgUrl: url },
+          'label_scan',
+          session.userId,
+          null
+        );
+      }
+
       json(res, 200, { url, wineId: tempId });
     } catch(e) {
       console.error('Label upload error:', e.message);
@@ -1606,100 +1916,194 @@ async function handleLabelUpload(req, res) {
   });
 }
 
-// ── POST /api/paypal/webhook ─────────────────────────────────────
-async function handlePayPalWebhook(req, res) {
-  parseBody(req, async (e, event) => {
-    if (e) return err(res, 400, 'Invalid webhook');
-
-    try {
-      if (event.event_type === 'BILLING.SUBSCRIPTION.ACTIVATED') {
-        const { id: subId, custom_id: userId } = event.resource;
-        // Determine plan from PayPal plan ID
-        const planId = event.resource.plan_id;
-        const plan = planId === process.env.PAYPAL_EXCLUSIVE_PLAN_ID ? 'exclusive' : 'premium';
-        const amount = plan === 'exclusive' ? 10.00 : 4.25;
-
-        const client = await db.connect();
-        try {
-          await client.query('BEGIN');
-          await client.query(
-            `UPDATE users SET plan=$1, plan_expires_at=NOW()+INTERVAL '1 month',
-             paypal_subscription_id=$2 WHERE id=$3`,
-            [plan, subId, userId]
-          );
-          await client.query(
-            `INSERT INTO subscriptions (user_id, paypal_subscription_id, plan, status, amount_usd, started_at)
-             VALUES ($1,$2,$3,'active',$4,NOW())`,
-            [userId, subId, plan, amount]
-          );
-          await client.query(
-            `INSERT INTO payment_events (user_id, event_type, amount_usd, paypal_event_id)
-             VALUES ($1,'subscription.activated',$2,$3)`,
-            [userId, amount, event.id]
-          );
-          await client.query('COMMIT');
-        } catch(e) {
-          await client.query('ROLLBACK');
-          throw e;
-        } finally {
-          client.release();
-        }
-      }
-
-      if (event.event_type === 'BILLING.SUBSCRIPTION.CANCELLED') {
-        const subId = event.resource.id;
-        await db.query(
-          "UPDATE users SET plan='free', plan_expires_at=NULL WHERE paypal_subscription_id=$1",
-          [subId]
-        );
-        await db.query(
-          "UPDATE subscriptions SET status='cancelled' WHERE paypal_subscription_id=$1",
-          [subId]
-        );
-      }
-
-      if (event.event_type === 'PAYMENT.SALE.COMPLETED') {
-        // Monthly recurring payment — record for QuickBooks sync
-        const subId = event.resource.billing_agreement_id;
-        const result = await db.query(
-          'SELECT user_id, plan, amount_usd FROM subscriptions WHERE paypal_subscription_id=$1',
-          [subId]
-        );
-        if (result.rows.length) {
-          const sub = result.rows[0];
-          await db.query(
-            `INSERT INTO payment_events (user_id, subscription_id, event_type, amount_usd, paypal_event_id)
-             SELECT id, $1, 'payment.completed', $2, $3 FROM subscriptions WHERE paypal_subscription_id=$4`,
-            [sub.id, sub.amount_usd, event.id, subId]
-          );
-          // Extend plan by 1 month
-          await db.query(
-            "UPDATE users SET plan_expires_at=GREATEST(plan_expires_at,NOW())+INTERVAL '1 month' WHERE paypal_subscription_id=$1",
-            [subId]
-          );
-        }
-      }
-
-      res.writeHead(200);
-      res.end('OK');
-    } catch(e) {
-      console.error('PayPal webhook error:', e.message);
-      res.writeHead(500);
-      res.end('Error');
-    }
+// ── POST /api/catalog/contribute ─────────────────────────────────
+// Called by client after any AI enrichment event with the structured data.
+// This is the catalog's primary write path.
+async function handleCatalogContribute(req, res) {
+  const session = authenticate(req);
+  if (!session) return err(res, 401, 'Unauthorized');
+  parseBody(req, async (e, body) => {
+    if (e) return err(res, 400, 'Invalid request');
+    const { enrichedData, sourceType, venueId } = body;
+    if (!enrichedData || !enrichedData.name) return err(res, 400, 'enrichedData.name required');
+    const validTypes = new Set(['label_scan','ai_enrich','venue_upload','csv_import']);
+    if (!validTypes.has(sourceType)) return err(res, 400, 'Invalid sourceType');
+    const catalogId = await contributeToWineCatalog(
+      enrichedData, sourceType, session.userId, venueId || null
+    );
+    json(res, 200, { ok: true, catalogId });
   });
 }
 
+// ══════════════════════════════════════════════════════════════
+// EDUCATION ENDPOINTS
+// ══════════════════════════════════════════════════════════════
+
+// ── GET /api/education/progress ───────────────────────────────
+async function handleGetEducationProgress(req, res) {
+  const session = authenticate(req);
+  if (!session) return err(res, 401, 'Unauthorized');
+  try {
+    const result = await db.query(
+      `SELECT path_id, topic_id, completed, quiz_score, quiz_attempts, last_seen_at
+       FROM education_progress WHERE user_id=$1`,
+      [session.userId]
+    );
+    json(res, 200, result.rows);
+  } catch(e) { console.error('GetEduProgress:', e.message); err(res, 500, 'Server error'); }
+}
+
+// ── POST /api/education/progress ─────────────────────────────
+async function handleSaveEducationProgress(req, res) {
+  const session = authenticate(req);
+  if (!session) return err(res, 401, 'Unauthorized');
+  parseBody(req, async (e, body) => {
+    if (e) return err(res, 400, 'Invalid request');
+    const { pathId, topicId, completed, quizScore } = body;
+    if (!pathId || !topicId) return err(res, 400, 'pathId and topicId required');
+    try {
+      await db.query(
+        `INSERT INTO education_progress (user_id, path_id, topic_id, completed, quiz_score, quiz_attempts, last_seen_at)
+         VALUES ($1,$2,$3,$4,$5,1,NOW())
+         ON CONFLICT (user_id, path_id, topic_id) DO UPDATE SET
+           completed = GREATEST(education_progress.completed::int, $4::int)::boolean,
+           quiz_score = CASE WHEN $5 IS NOT NULL AND ($5 > COALESCE(education_progress.quiz_score,0)) THEN $5 ELSE education_progress.quiz_score END,
+           quiz_attempts = education_progress.quiz_attempts + 1,
+           last_seen_at = NOW()`,
+        [session.userId, pathId, topicId, completed || false, quizScore || null]
+      );
+      json(res, 200, { ok: true });
+    } catch(e) { console.error('SaveEduProgress:', e.message); err(res, 500, 'Server error'); }
+  });
+}
+
+// ── GET /api/education/content/:pathId/:topicId/:type ─────────
+// Returns cached AI content or generates fresh
+async function handleGetEducationContent(req, res, pathId, topicId, contentType) {
+  const session = authenticate(req);
+  if (!session) return err(res, 401, 'Unauthorized');
+
+  // Validate against known curriculum values — prevents prompt injection and arbitrary caching
+  const VALID_PATHS = new Set(['wset-l1','wset-l2','wset-l3','regions','grapes','production','tasting','vintages']);
+  const VALID_TYPES = new Set(['lesson','flashcards','quiz']);
+  if (!VALID_PATHS.has(pathId))    return err(res, 400, 'Invalid path');
+  if (!VALID_TYPES.has(contentType)) return err(res, 400, 'Invalid content type');
+  // topicId must be alphanumeric with hyphens only
+  if (!/^[a-z0-9-]+$/.test(topicId) || topicId.length > 100) return err(res, 400, 'Invalid topic');
+
+  try {
+    // Check cache first
+    const cached = await db.query(
+      `SELECT content_json FROM education_content WHERE path_id=$1 AND topic_id=$2 AND content_type=$3`,
+      [pathId, topicId, contentType]
+    );
+    if (cached.rows.length) return json(res, 200, cached.rows[0].content_json);
+
+    // Generate fresh content
+    const topicName = topicId.replace(/-/g, ' ').replace(/wset l(\d)/i, 'WSET Level $1');
+    const pathName  = pathId.replace(/-/g, ' ');
+
+    let prompt = '';
+    if (contentType === 'lesson') {
+      prompt = `Write a focused wine education lesson about "${topicName}" as part of the "${pathName}" curriculum.
+Structure: 3-4 short sections with bold headings. 400-500 words total. Educational, clear, and engaging.
+Return JSON: {"title":"lesson title","sections":[{"heading":"heading","content":"paragraph text"}]}`;
+    } else if (contentType === 'flashcards') {
+      prompt = `Create 8-10 flashcards for the wine topic "${topicName}".
+Each card: a clear question on one side, a concise answer on the other.
+Return JSON: {"cards":[{"question":"...","answer":"..."}]}`;
+    } else if (contentType === 'quiz') {
+      prompt = `Create 5 multiple-choice quiz questions about "${topicName}" for a wine education app.
+Each question: 4 options (A-D), one correct answer, and a brief explanation.
+Return JSON: {"questions":[{"question":"...","options":["A...","B...","C...","D..."],"correct":0,"explanation":"..."}]}`;
+    } else {
+      return err(res, 400, 'Invalid content type');
+    }
+
+    const anthropicKey = process.env.ANTHROPIC_API_KEY;
+    if (!anthropicKey) return err(res, 503, 'AI not configured');
+
+    const aiRes = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-api-key': anthropicKey, 'anthropic-version': '2023-06-01' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-6', max_tokens: 1200,
+        messages: [{ role: 'user', content: prompt }],
+        system: 'You are an expert wine educator. Return ONLY valid JSON, no markdown or backticks.'
+      })
+    });
+    const aiData = await aiRes.json();
+    const raw = aiData.content?.[0]?.text || '{}';
+    const parsed = JSON.parse(raw.replace(/```json|```/g, '').trim());
+
+    // Cache it
+    await db.query(
+      `INSERT INTO education_content (path_id, topic_id, content_type, content_json)
+       VALUES ($1,$2,$3,$4) ON CONFLICT (path_id, topic_id, content_type) DO UPDATE SET content_json=$4, generated_at=NOW()`,
+      [pathId, topicId, contentType, JSON.stringify(parsed)]
+    );
+
+    json(res, 200, parsed);
+  } catch(e) { console.error('GetEduContent:', e.message); err(res, 500, 'Server error'); }
+}
+
+// Simple in-memory rate limiter for AI endpoints
+// Resets per hour per user — lightweight, no external dependency
+const AI_RATE = new Map(); // userId → { count, resetAt }
+function checkAIRate(userId, limit = 50) {
+  const now = Date.now();
+  const entry = AI_RATE.get(userId) || { count: 0, resetAt: now + 3600000 };
+  if (now > entry.resetAt) { entry.count = 0; entry.resetAt = now + 3600000; }
+  if (entry.count >= limit) return false;
+  entry.count++;
+  AI_RATE.set(userId, entry);
+  return true;
+}
+
+// ── POST /api/education/explore ───────────────────────────────
+// AI Explore — freeform wine education chat
+async function handleEducationExplore(req, res) {
+  const session = authenticate(req);
+  if (!session) return err(res, 401, 'Unauthorized');
+  parseBody(req, async (e, body) => {
+    if (e) return err(res, 400, 'Invalid request');
+    const { question, history } = body;
+    if (!question) return err(res, 400, 'question required');
+    if (!checkAIRate(session.userId, 50)) return err(res, 429, 'Rate limit reached — try again in an hour');
+    const cappedHistory = (history || []).slice(-8); // max 4 turns of context
+    const anthropicKey = process.env.ANTHROPIC_API_KEY;
+    if (!anthropicKey) return err(res, 503, 'AI not configured');
+    try {
+      const messages = [...cappedHistory, { role: 'user', content: question }];
+      const aiRes = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-api-key': anthropicKey, 'anthropic-version': '2023-06-01' },
+        body: JSON.stringify({
+          model: 'claude-sonnet-4-6', max_tokens: 600,
+          system: 'You are an expert wine educator and tutor. Answer wine questions clearly and educationally. Use structured responses with short paragraphs. Be informative but concise. Never recommend specific purchases.',
+          messages
+        })
+      });
+      const aiData = await aiRes.json();
+      json(res, 200, { answer: aiData.content?.[0]?.text || 'I could not generate a response.' });
+    } catch(e) { console.error('EduExplore:', e.message); err(res, 500, 'Server error'); }
+  });
+}
+
+// ── POST /api/upload/label ────────────────────────────────────────
+// Upload a label photo independently (before wine is saved)
 // ── Venue API (DB-backed) ────────────────────────────────────────
 
 // GET /api/venue/:id
 async function handleGetVenue(req, res, venueId) {
-  // Still reads from flat JSON files — migrate to DB in a future phase
+  // Sanitise venueId — must be alphanumeric + hyphens only (same rule as signup)
+  if (!/^[a-z0-9-]+$/.test(venueId)) { res.writeHead(400); res.end('Invalid venue'); return; }
   serveJsonFile(path.join(__dirname, 'clients', venueId, 'venue.json'), res);
 }
 
 // GET /api/venue/:id/feed
 async function handleGetFeed(req, res, venueId) {
+  if (!/^[a-z0-9-]+$/.test(venueId)) { res.writeHead(400); res.end('Invalid venue'); return; }
   serveJsonFile(path.join(__dirname, 'clients', venueId, 'feed.json'), res);
 }
 
@@ -1762,6 +2166,388 @@ async function handleVenueJoin(req, res, venueId) {
     console.error('VenueJoin error:', e.message);
     err(res, 500, 'Server error');
   }
+}
+
+// ════════════════════════════════════════════════════════════════
+// SUPER-ADMIN — ChikPea internal panel at /superadmin
+// Separate JWT scope ('admin'), separate admin_users table.
+// Never overlaps with user or venue admin auth.
+// ════════════════════════════════════════════════════════════════
+
+function authenticateAdmin(req) {
+  try {
+    const auth = req.headers.authorization || '';
+    const token = auth.replace('Bearer ', '');
+    if (!token) return null;
+    const decoded = jwt.verify(token, JWT_SECRET);
+    if (decoded.type !== 'admin') return null;
+    return decoded;
+  } catch(e) { return null; }
+}
+
+// ── POST /api/superadmin/login ────────────────────────────────
+async function handleAdminLogin(req, res) {
+  parseBody(req, async (e, body) => {
+    if (e) return err(res, 400, 'Invalid request');
+    const { email, password } = body;
+    if (!email || !password) return err(res, 400, 'Email and password required');
+    try {
+      const result = await db.query(
+        `SELECT * FROM admin_users WHERE email=$1`, [email.toLowerCase()]
+      );
+      if (!result.rows.length) return err(res, 401, 'Invalid credentials');
+      const admin = result.rows[0];
+      const valid = await bcrypt.compare(password, admin.password_hash);
+      if (!valid) return err(res, 401, 'Invalid credentials');
+      await db.query(`UPDATE admin_users SET last_login_at=NOW() WHERE id=$1`, [admin.id]);
+      const token = jwt.sign(
+        { adminId: admin.id, email: admin.email, type: 'admin' },
+        JWT_SECRET, { expiresIn: '12h' }
+      );
+      json(res, 200, { token, admin: { id: admin.id, email: admin.email, name: admin.name } });
+    } catch(e) { console.error('AdminLogin:', e.message); err(res, 500, 'Server error'); }
+  });
+}
+
+// ── POST /api/superadmin/setup ────────────────────────────────
+// One-time setup — creates first admin user. Disabled once any admin exists.
+async function handleAdminSetup(req, res) {
+  parseBody(req, async (e, body) => {
+    if (e) return err(res, 400, 'Invalid request');
+    const { email, password, name, setupKey } = body;
+    if (setupKey !== process.env.ADMIN_SETUP_KEY)
+      return err(res, 403, 'Invalid setup key');
+    try {
+      const existing = await db.query('SELECT COUNT(*) FROM admin_users');
+      if (parseInt(existing.rows[0].count) > 0)
+        return err(res, 409, 'Admin already exists — use login');
+      if (!email || !password || password.length < 10)
+        return err(res, 400, 'Email and password (10+ chars) required');
+      const hash = await bcrypt.hash(password, 12);
+      const result = await db.query(
+        `INSERT INTO admin_users (email, password_hash, name) VALUES ($1,$2,$3) RETURNING id, email, name`,
+        [email.toLowerCase(), hash, name || 'Admin']
+      );
+      json(res, 201, { ok: true, admin: result.rows[0] });
+    } catch(e) { console.error('AdminSetup:', e.message); err(res, 500, 'Server error'); }
+  });
+}
+
+// ── GET /api/superadmin/overview ──────────────────────────────
+async function handleAdminOverview(req, res) {
+  if (!authenticateAdmin(req)) return err(res, 401, 'Unauthorized');
+  try {
+    const [users, venues, catalog, subs, wines, events, orders, apiToday] = await Promise.all([
+      db.query(`SELECT COUNT(*) AS total,
+                COUNT(*) FILTER (WHERE created_at > NOW()-INTERVAL '7 days') AS new_7d,
+                COUNT(*) FILTER (WHERE plan='premium') AS premium,
+                COUNT(*) FILTER (WHERE plan='exclusive') AS exclusive
+                FROM users`),
+      db.query(`SELECT COUNT(*) AS total,
+                COUNT(*) FILTER (WHERE created_at > NOW()-INTERVAL '30 days') AS new_30d
+                FROM venue_accounts`),
+      db.query(`SELECT COUNT(*) AS total,
+                COUNT(*) FILTER (WHERE confidence_score>=60) AS high_conf,
+                COUNT(*) FILTER (WHERE created_at > NOW()-INTERVAL '30 days') AS new_30d,
+                SUM(source_count) AS total_contributions
+                FROM wine_catalog`),
+      db.query(`SELECT COUNT(*) AS active,
+                SUM(amount_usd) AS mrr
+                FROM subscriptions WHERE status='active'`),
+      db.query(`SELECT COUNT(*) AS total FROM wines`),
+      db.query(`SELECT COUNT(*) AS total FROM group_events`),
+      db.query(`SELECT COUNT(*) AS total,
+                SUM(total_price) AS gmv
+                FROM shop_orders`),
+      db.query(`SELECT endpoint,
+                COUNT(*) AS calls,
+                SUM(est_cost_usd) AS cost
+                FROM api_usage_log
+                WHERE created_at > NOW()-INTERVAL '1 day'
+                GROUP BY endpoint ORDER BY calls DESC`),
+    ]);
+    json(res, 200, {
+      users:    users.rows[0],
+      venues:   venues.rows[0],
+      catalog:  catalog.rows[0],
+      subs:     subs.rows[0],
+      wines:    wines.rows[0],
+      events:   events.rows[0],
+      orders:   orders.rows[0],
+      apiToday: apiToday.rows,
+    });
+  } catch(e) { console.error('AdminOverview:', e.message); err(res, 500, 'Server error'); }
+}
+
+// ── GET /api/superadmin/users ─────────────────────────────────
+async function handleAdminUsers(req, res) {
+  if (!authenticateAdmin(req)) return err(res, 401, 'Unauthorized');
+  const params = new URL(req.url, 'http://localhost').searchParams;
+  const page   = Math.max(1, parseInt(params.get('page') || '1'));
+  const limit  = 50;
+  const offset = (page - 1) * limit;
+  const q      = (params.get('q') || '').trim();
+  try {
+    const where = q ? `WHERE u.name ILIKE $3 OR u.email ILIKE $3` : '';
+    const args  = q ? [limit, offset, `%${q}%`] : [limit, offset];
+    const result = await db.query(
+      `SELECT u.id, u.email, u.name, u.plan, u.lang, u.created_at,
+              COUNT(DISTINCT w.id) AS wine_count,
+              COUNT(DISTINCT gm.group_id) AS group_count
+       FROM users u
+       LEFT JOIN wines w ON w.user_id = u.id
+       LEFT JOIN group_members gm ON gm.user_id = u.id
+       ${where}
+       GROUP BY u.id
+       ORDER BY u.created_at DESC
+       LIMIT $1 OFFSET $2`, args
+    );
+    const total = await db.query(
+      `SELECT COUNT(*) FROM users ${q ? "WHERE name ILIKE $1 OR email ILIKE $1" : ""}`,
+      q ? [`%${q}%`] : []
+    );
+    json(res, 200, { users: result.rows, total: parseInt(total.rows[0].count), page, limit });
+  } catch(e) { console.error('AdminUsers:', e.message); err(res, 500, 'Server error'); }
+}
+
+// ── GET /api/superadmin/venues ────────────────────────────────
+async function handleAdminVenues(req, res) {
+  if (!authenticateAdmin(req)) return err(res, 401, 'Unauthorized');
+  try {
+    const result = await db.query(
+      `SELECT va.venue_id, va.venue_name, va.email, va.city, va.country,
+              va.venue_type, va.created_at,
+              COUNT(DISTINCT vm.user_id) AS member_count,
+              COUNT(DISTINCT si.id) AS shop_item_count,
+              COUNT(DISTINCT so.id) AS order_count,
+              COALESCE(SUM(so.total_price),0) AS total_gmv
+       FROM venue_accounts va
+       LEFT JOIN venue_members vm ON vm.venue_id = va.venue_id
+       LEFT JOIN shop_sellers ss ON ss.venue_id = va.venue_id
+       LEFT JOIN shop_items si ON si.seller_id = ss.id
+       LEFT JOIN shop_orders so ON so.seller_id = ss.id
+       GROUP BY va.venue_id
+       ORDER BY va.created_at DESC`
+    );
+    json(res, 200, result.rows);
+  } catch(e) { console.error('AdminVenues:', e.message); err(res, 500, 'Server error'); }
+}
+
+// ── GET /api/superadmin/catalog ───────────────────────────────
+async function handleAdminCatalog(req, res) {
+  if (!authenticateAdmin(req)) return err(res, 401, 'Unauthorized');
+  const params = new URL(req.url, 'http://localhost').searchParams;
+  const page   = Math.max(1, parseInt(params.get('page') || '1'));
+  const limit  = 50;
+  const offset = (page - 1) * limit;
+  try {
+    const [wines, stats, sources] = await Promise.all([
+      db.query(
+        `SELECT id, canonical_name, producer, vintage_year, region, country,
+                grapes, style, confidence_score, source_count, last_enriched_at
+         FROM wine_catalog
+         ORDER BY confidence_score DESC, source_count DESC
+         LIMIT $1 OFFSET $2`, [limit, offset]
+      ),
+      db.query(
+        `SELECT COUNT(*) AS total,
+                COUNT(*) FILTER (WHERE confidence_score>=80) AS very_high,
+                COUNT(*) FILTER (WHERE confidence_score>=60 AND confidence_score<80) AS high,
+                COUNT(*) FILTER (WHERE confidence_score>=40 AND confidence_score<60) AS medium,
+                COUNT(*) FILTER (WHERE confidence_score<40) AS low,
+                COUNT(DISTINCT country) AS countries,
+                COUNT(DISTINCT region) AS regions
+         FROM wine_catalog`
+      ),
+      db.query(
+        `SELECT source_type, COUNT(*) AS count,
+                AVG(c.confidence_score)::INTEGER AS avg_conf
+         FROM wine_catalog_sources wcs
+         JOIN wine_catalog c ON c.id = wcs.catalog_id
+         GROUP BY source_type ORDER BY count DESC`
+      ),
+    ]);
+    const total = await db.query('SELECT COUNT(*) FROM wine_catalog');
+    json(res, 200, {
+      wines: wines.rows,
+      stats: stats.rows[0],
+      sources: sources.rows,
+      total: parseInt(total.rows[0].count),
+      page, limit
+    });
+  } catch(e) { console.error('AdminCatalog:', e.message); err(res, 500, 'Server error'); }
+}
+
+// ── GET /api/superadmin/subscriptions ────────────────────────
+async function handleAdminSubscriptions(req, res) {
+  if (!authenticateAdmin(req)) return err(res, 401, 'Unauthorized');
+  try {
+    const [active, events, mrr] = await Promise.all([
+      db.query(
+        `SELECT s.*, u.name AS user_name, u.email AS user_email
+         FROM subscriptions s JOIN users u ON u.id = s.user_id
+         WHERE s.status = 'active'
+         ORDER BY s.started_at DESC`
+      ),
+      db.query(
+        `SELECT pe.*, u.name AS user_name, u.email AS user_email
+         FROM payment_events pe
+         JOIN users u ON u.id = pe.user_id
+         ORDER BY pe.created_at DESC LIMIT 100`
+      ),
+      db.query(
+        `SELECT plan,
+                COUNT(*) AS subscribers,
+                SUM(amount_usd) AS mrr
+         FROM subscriptions WHERE status='active'
+         GROUP BY plan`
+      ),
+    ]);
+    json(res, 200, {
+      active: active.rows,
+      events: events.rows,
+      mrr: mrr.rows,
+    });
+  } catch(e) { console.error('AdminSubs:', e.message); err(res, 500, 'Server error'); }
+}
+
+// ── GET /api/superadmin/orders ────────────────────────────────
+async function handleAdminOrders(req, res) {
+  if (!authenticateAdmin(req)) return err(res, 401, 'Unauthorized');
+  try {
+    const result = await db.query(
+      `SELECT so.*, si.title AS item_title, si.category,
+              ss.business_name AS seller_name, ss.venue_id
+       FROM shop_orders so
+       JOIN shop_items si ON si.id = so.item_id
+       JOIN shop_sellers ss ON ss.id = so.seller_id
+       ORDER BY so.created_at DESC LIMIT 200`
+    );
+    const stats = await db.query(
+      `SELECT COUNT(*) AS total_orders,
+              SUM(total_price) AS total_gmv,
+              SUM(commission_due) AS total_commission,
+              COUNT(DISTINCT seller_id) AS active_sellers
+       FROM shop_orders`
+    );
+    json(res, 200, { orders: result.rows, stats: stats.rows[0] });
+  } catch(e) { console.error('AdminOrders:', e.message); err(res, 500, 'Server error'); }
+}
+
+// ── GET /api/superadmin/api-usage ────────────────────────────
+async function handleAdminApiUsage(req, res) {
+  if (!authenticateAdmin(req)) return err(res, 401, 'Unauthorized');
+  const params = new URL(req.url, 'http://localhost').searchParams;
+  const days   = Math.min(90, parseInt(params.get('days') || '30'));
+  try {
+    const [daily, byEndpoint, topUsers, totals] = await Promise.all([
+      db.query(
+        `SELECT DATE(created_at) AS day,
+                COUNT(*) AS calls,
+                SUM(est_cost_usd) AS cost
+         FROM api_usage_log
+         WHERE created_at > NOW() - ($1 || ' days')::INTERVAL
+         GROUP BY day ORDER BY day DESC`, [days]
+      ),
+      db.query(
+        `SELECT endpoint,
+                COUNT(*) AS calls,
+                SUM(input_tokens) AS input_tokens,
+                SUM(output_tokens) AS output_tokens,
+                SUM(est_cost_usd) AS cost
+         FROM api_usage_log
+         WHERE created_at > NOW() - ($1 || ' days')::INTERVAL
+         GROUP BY endpoint ORDER BY calls DESC`, [days]
+      ),
+      db.query(
+        `SELECT u.name, u.email, u.plan,
+                COUNT(a.id) AS calls,
+                SUM(a.est_cost_usd) AS cost
+         FROM api_usage_log a
+         JOIN users u ON u.id = a.user_id
+         WHERE a.created_at > NOW() - ($1 || ' days')::INTERVAL
+         GROUP BY u.id, u.name, u.email, u.plan
+         ORDER BY calls DESC LIMIT 20`, [days]
+      ),
+      db.query(
+        `SELECT COUNT(*) AS total_calls,
+                SUM(est_cost_usd) AS total_cost,
+                SUM(input_tokens) AS total_input,
+                SUM(output_tokens) AS total_output
+         FROM api_usage_log
+         WHERE created_at > NOW() - ($1 || ' days')::INTERVAL`, [days]
+      ),
+    ]);
+    json(res, 200, {
+      daily: daily.rows,
+      byEndpoint: byEndpoint.rows,
+      topUsers: topUsers.rows,
+      totals: totals.rows[0],
+      days
+    });
+  } catch(e) { console.error('AdminApiUsage:', e.message); err(res, 500, 'Server error'); }
+}
+
+// ── GET /api/superadmin/education ────────────────────────────
+async function handleAdminEducation(req, res) {
+  if (!authenticateAdmin(req)) return err(res, 401, 'Unauthorized');
+  try {
+    const [progress, content, topPaths] = await Promise.all([
+      db.query(
+        `SELECT COUNT(DISTINCT user_id) AS users_active,
+                COUNT(*) AS total_completions,
+                AVG(quiz_score) FILTER (WHERE quiz_score IS NOT NULL)::INTEGER AS avg_quiz_score
+         FROM education_progress WHERE completed = true`
+      ),
+      db.query(`SELECT COUNT(*) AS cached_lessons FROM education_content`),
+      db.query(
+        `SELECT path_id,
+                COUNT(DISTINCT user_id) AS users,
+                COUNT(*) FILTER (WHERE completed=true) AS completions
+         FROM education_progress
+         GROUP BY path_id ORDER BY users DESC`
+      ),
+    ]);
+    json(res, 200, {
+      progress: progress.rows[0],
+      content: content.rows[0],
+      topPaths: topPaths.rows,
+    });
+  } catch(e) { console.error('AdminEducation:', e.message); err(res, 500, 'Server error'); }
+}
+
+// ── GET /api/superadmin/admin-users ──────────────────────────
+async function handleAdminAdminUsers(req, res) {
+  if (!authenticateAdmin(req)) return err(res, 401, 'Unauthorized');
+  try {
+    const result = await db.query(
+      `SELECT id, email, name, created_at, last_login_at FROM admin_users ORDER BY created_at`
+    );
+    json(res, 200, result.rows);
+  } catch(e) { console.error('AdminAdminUsers:', e.message); err(res, 500, 'Server error'); }
+}
+
+// ── POST /api/superadmin/admin-users ─────────────────────────
+async function handleAdminCreateAdminUser(req, res) {
+  if (!authenticateAdmin(req)) return err(res, 401, 'Unauthorized');
+  parseBody(req, async (e, body) => {
+    if (e) return err(res, 400, 'Invalid request');
+    const { email, password, name } = body;
+    if (!email || !password || password.length < 10)
+      return err(res, 400, 'Email and password (10+ chars) required');
+    try {
+      const hash = await bcrypt.hash(password, 12);
+      const result = await db.query(
+        `INSERT INTO admin_users (email, password_hash, name) VALUES ($1,$2,$3)
+         RETURNING id, email, name, created_at`,
+        [email.toLowerCase(), hash, name || null]
+      );
+      json(res, 201, result.rows[0]);
+    } catch(e) {
+      if (e.code === '23505') return err(res, 409, 'Email already exists');
+      console.error('AdminCreateUser:', e.message); err(res, 500, 'Server error');
+    }
+  });
 }
 
 // ════════════════════════════════════════════════════════════════
@@ -1842,7 +2628,7 @@ async function handleVenueForgotPassword(req, res) {
       );
 
       const resetUrl = `${req.headers.origin || ''}/reset-password.html?token=${token}&type=venue`;
-      console.log(`[password reset] venue ${account.venue_name} (${account.email}) → ${resetUrl}`);
+      console.log(`[password reset] requested for venue ${account.email}`);
 
       json(res, 200, {
         ok: true,
@@ -2141,18 +2927,86 @@ async function handleVenueAdminUpdateReview(req, res, reviewId) {
 // MAIN SERVER
 // ════════════════════════════════════════════════════════════════
 
+// ── CORS whitelist ────────────────────────────────────────────
+// Add your production domain here when deploying to IONOS
+const ALLOWED_ORIGINS = new Set([
+  'https://localhost:8081',
+  'http://localhost:8081',
+  'https://192.168.1.147:8081',
+  'http://192.168.1.147:8081',
+  // e.g. 'https://cellartrek.chikpea.com'
+]);
+
+// ── Pre-compiled route patterns ───────────────────────────────
+// Compiled once at startup, not on every request
+const ROUTES = {
+  // User
+  publicProfile:      /^\/api\/users\/([^/]+)\/public$/,
+  // Social — friends
+  friend:             /^\/api\/social\/friends\/([^/]+)$/,
+  // Social — groups
+  group:              /^\/api\/social\/groups\/([^/]+)$/,
+  groupMembers:       /^\/api\/social\/groups\/([^/]+)\/members$/,
+  groupJoin:          /^\/api\/social\/groups\/([^/]+)\/join$/,
+  groupEvents:        /^\/api\/social\/groups\/([^/]+)\/events$/,
+  groupTrips:         /^\/api\/social\/groups\/([^/]+)\/trips$/,
+  // Social — events
+  eventGuests:        /^\/api\/social\/events\/([^/]+)\/guests$/,
+  eventRSVP:          /^\/api\/social\/events\/([^/]+)\/rsvp$/,
+  eventCheckin:       /^\/api\/social\/events\/([^/]+)\/checkin$/,
+  event:              /^\/api\/social\/events\/([^/]+)$/,
+  publicEvent:        /^\/api\/social\/events\/public\/([^/]+)$/,
+  publicEventRsvp:    /^\/api\/social\/events\/public\/([^/]+)\/rsvp$/,
+  // Social — trips
+  tripRSVP:           /^\/api\/social\/trips\/([^/]+)\/rsvp$/,
+  // Wines
+  wineOpenBottle:     /^\/api\/wines\/([^/]+)\/open-bottle$/,
+  wineQty:            /^\/api\/wines\/([^/]+)\/qty$/,
+  wine:               /^\/api\/wines\/([^/]+)$/,
+  // Education
+  eduContent:         /^\/api\/education\/content\/([^/]+)\/([^/]+)\/([^/]+)$/,
+  // Venue (public consumer)
+  venueBase:          /^\/api\/venues\/([^/]+)$/,
+  venueFeed:          /^\/api\/venues\/([^/]+)\/feed$/,
+  venueRequest:       /^\/api\/venues\/([^/]+)\/request$/,
+  venueReview:        /^\/api\/venues\/([^/]+)\/review$/,
+  venueJoin:          /^\/api\/venues\/([^/]+)\/join$/,
+  pubVenueProfile:    /^\/api\/venues\/([^/]+)\/public$/,
+  // Venue admin — parameterised
+  venueMember:        /^\/api\/venue-admin\/members\/([^/]+)$/,
+  venueShopItem:      /^\/api\/venue-admin\/shop\/items\/([^/]+)$/,
+  venueOrder:         /^\/api\/venue-admin\/shop\/orders\/([^/]+)$/,
+  venueFeedItem:      /^\/api\/venue-admin\/feed\/([^/]+)$/,
+  venueRequestItem:   /^\/api\/venue-admin\/requests\/([^/]+)$/,
+  venueReviewItem:    /^\/api\/venue-admin\/reviews\/([^/]+)$/,
+  // Static pages
+  eventPage:          /^\/event\/[^/]+$/,
+  venueMaterialPage:  /^\/(venue-material-[\w-]+\.html)$/,
+};
+
 const requestHandler = async (req, res) => {
-  // CORS
-  res.setHeader('Access-Control-Allow-Origin',  '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, x-api-key, anthropic-version');
+
+  // ── Security & CORS headers ─────────────────────────────────
+  const origin = req.headers.origin;
+  if (origin && ALLOWED_ORIGINS.has(origin)) {
+    res.setHeader('Access-Control-Allow-Origin',  origin);
+    res.setHeader('Vary', 'Origin');
+  }
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
   if (req.method === 'OPTIONS') { res.writeHead(204); res.end(); return; }
 
   const url    = req.url.split('?')[0];
   const method = req.method;
 
-  // ── Anthropic proxy ────────────────────────────────────────────
+  // ── (1) ANTHROPIC PROXY ────────────────────────────────────
+  // Auth required — prevents unauthenticated API abuse
   if (url === '/api/anthropic' && method === 'POST') {
+    const session = authenticate(req);
+    if (!session) return err(res, 401, 'Unauthorized');
     parseBody(req, (e, body) => {
       if (e) return err(res, 400, 'Invalid request');
       if (!API_KEY) return err(res, 500, 'ANTHROPIC_API_KEY not set');
@@ -2184,262 +3038,235 @@ const requestHandler = async (req, res) => {
     return;
   }
 
-  // ── Auth routes ────────────────────────────────────────────────
-  if (url === '/api/auth/signup'  && method === 'POST') return handleSignup(req, res);
-  if (url === '/api/auth/login'   && method === 'POST') return handleLogin(req, res);
+  // ── (2) USER AUTH ──────────────────────────────────────────
+  if (url === '/api/auth/signup'          && method === 'POST') return handleSignup(req, res);
+  if (url === '/api/auth/login'           && method === 'POST') return handleLogin(req, res);
   if (url === '/api/auth/forgot-password' && method === 'POST') return handleForgotPassword(req, res);
   if (url === '/api/auth/reset-password'  && method === 'POST') return handleResetPassword(req, res);
+
+  // ── (3) USER PROFILE ───────────────────────────────────────
   if (url === '/api/user/profile' && method === 'GET')  return handleProfile(req, res);
   if (url === '/api/user/profile' && method === 'PUT')  return handleUpdateProfile(req, res);
+  if (url === '/api/user'         && method === 'DELETE') return handleDeleteUser(req, res);
+  const publicProfileMatch = ROUTES.publicProfile.exec(url);
+  if (publicProfileMatch && method === 'GET') return handlePublicProfile(req, res, publicProfileMatch[1]);
 
-  // ── Social layer routes ──────────────────────────────────────────
-  if (url === '/api/social/friends' && method === 'GET')  return handleGetFriends(req, res);
+  // ── (4) SOCIAL — FRIENDS ───────────────────────────────────
+  if (url === '/api/social/friends'         && method === 'GET')  return handleGetFriends(req, res);
   if (url === '/api/social/friends/request' && method === 'POST') return handleFriendRequest(req, res);
+  const friendMatch = ROUTES.friend.exec(url);
+  if (friendMatch && (method === 'PUT' || method === 'DELETE')) return handleFriendAction(req, res, friendMatch[1]);
 
-  const friendMatch = url.match(/^\/api\/social\/friends\/([^/]+)$/);
-  if (friendMatch && method === 'PUT')   return handleFriendAction(req, res, friendMatch[1]);
-  if (friendMatch && method === 'DELETE') return handleFriendAction(req, res, friendMatch[1]);
-
+  // ── (5) SOCIAL — GROUPS ────────────────────────────────────
   if (url === '/api/social/groups' && method === 'GET')  return handleGetGroups(req, res);
   if (url === '/api/social/groups' && method === 'POST') return handleCreateGroup(req, res);
-
-  const groupMatch = url.match(/^\/api\/social\/groups\/([^/]+)$/);
-  if (groupMatch) {
-    if (method === 'GET') return handleGetGroups(req, res);
-  }
-
-  const groupMembersMatch = url.match(/^\/api\/social\/groups\/([^/]+)\/members$/);
+  const groupMatch        = ROUTES.group.exec(url);
+  const groupMembersMatch = ROUTES.groupMembers.exec(url);
+  const groupJoinMatch    = ROUTES.groupJoin.exec(url);
+  const groupEventsMatch  = ROUTES.groupEvents.exec(url);
+  const groupTripsMatch   = ROUTES.groupTrips.exec(url);
   if (groupMembersMatch && method === 'GET')  return handleGetGroupMembers(req, res, groupMembersMatch[1]);
+  if (groupJoinMatch    && method === 'POST') return handleJoinGroup(req, res, groupJoinMatch[1]);
+  if (groupEventsMatch  && method === 'GET')  return handleGetGroupEvents(req, res, groupEventsMatch[1]);
+  if (groupEventsMatch  && method === 'POST') return handleCreateEvent(req, res, groupEventsMatch[1]);
+  if (groupTripsMatch   && method === 'GET')  return handleGetTrips(req, res, groupTripsMatch[1]);
+  if (groupTripsMatch   && method === 'POST') return handleCreateTrip(req, res, groupTripsMatch[1]);
+  if (groupMatch        && method === 'GET')  return handleGetGroups(req, res);
 
-  const groupJoinMatch = url.match(/^\/api\/social\/groups\/([^/]+)\/join$/);
-  if (groupJoinMatch && method === 'POST') return handleJoinGroup(req, res, groupJoinMatch[1]);
-
-  const groupEventsMatch = url.match(/^\/api\/social\/groups\/([^/]+)\/events$/);
-  if (groupEventsMatch && method === 'GET')  return handleGetGroupEvents(req, res, groupEventsMatch[1]);
-  if (groupEventsMatch && method === 'POST') return handleCreateEvent(req, res, groupEventsMatch[1]);
-
-  const eventRSVPMatch = url.match(/^\/api\/social\/events\/([^/]+)\/rsvp$/);
-  if (eventRSVPMatch && method === 'PUT') return handleEventRSVP(req, res, eventRSVPMatch[1]);
-
-  const eventCheckinMatch = url.match(/^\/api\/social\/events\/([^/]+)\/checkin$/);
-  if (eventCheckinMatch && method === 'POST') return handleEventCheckin(req, res, eventCheckinMatch[1]);
-
-  const eventGuestsMatch = url.match(/^\/api\/social\/events\/([^/]+)\/guests$/);
-  if (eventGuestsMatch && method === 'GET') return handleGetEventGuests(req, res, eventGuestsMatch[1]);
-
-  const eventMatch = url.match(/^\/api\/social\/events\/([^/]+)$/);
-  if (eventMatch && method === 'PUT')    return handleUpdateEvent(req, res, eventMatch[1]);
-  if (eventMatch && method === 'DELETE') return handleDeleteEvent(req, res, eventMatch[1]);
-
-  const publicEventMatch = url.match(/^\/api\/social\/events\/public\/([^/]+)$/);
-  if (publicEventMatch && method === 'GET') return handlePublicEvent(req, res, publicEventMatch[1]);
-
-  const publicEventRsvpMatch = url.match(/^\/api\/social\/events\/public\/([^/]+)\/rsvp$/);
+  // ── (6) SOCIAL — EVENTS ────────────────────────────────────
+  const eventGuestsMatch    = ROUTES.eventGuests.exec(url);
+  const eventRSVPMatch      = ROUTES.eventRSVP.exec(url);
+  const eventCheckinMatch   = ROUTES.eventCheckin.exec(url);
+  const eventMatch          = ROUTES.event.exec(url);
+  const publicEventMatch    = ROUTES.publicEvent.exec(url);
+  const publicEventRsvpMatch = ROUTES.publicEventRsvp.exec(url);
+  if (eventGuestsMatch     && method === 'GET')  return handleGetEventGuests(req, res, eventGuestsMatch[1]);
+  if (eventRSVPMatch       && method === 'PUT')  return handleEventRSVP(req, res, eventRSVPMatch[1]);
+  if (eventCheckinMatch    && method === 'POST') return handleEventCheckin(req, res, eventCheckinMatch[1]);
   if (publicEventRsvpMatch && method === 'POST') return handlePublicEventRsvp(req, res, publicEventRsvpMatch[1]);
-
-  // Public event RSVP page — /event/:token serves event.html
-  if (url.match(/^\/event\/[^/]+$/)) {
-    fs.readFile(path.join(__dirname, 'event.html'), (e, data) => {
-      if (e) return err(res, 500, 'Event page not found');
-      res.writeHead(200, { 'Content-Type': 'text/html' });
-      res.end(data);
-    });
-    return;
-  }
-
-  const groupTripsMatch = url.match(/^\/api\/social\/groups\/([^/]+)\/trips$/);
-  if (groupTripsMatch && method === 'GET')  return handleGetTrips(req, res, groupTripsMatch[1]);
-  if (groupTripsMatch && method === 'POST') return handleCreateTrip(req, res, groupTripsMatch[1]);
-
-  const tripRSVPMatch = url.match(/^\/api\/social\/trips\/([^/]+)\/rsvp$/);
+  if (publicEventMatch     && method === 'GET')  return handlePublicEvent(req, res, publicEventMatch[1]);
+  if (eventMatch           && method === 'PUT')  return handleUpdateEvent(req, res, eventMatch[1]);
+  if (eventMatch           && method === 'DELETE') return handleDeleteEvent(req, res, eventMatch[1]);
+  const tripRSVPMatch = ROUTES.tripRSVP.exec(url);
   if (tripRSVPMatch && method === 'PUT') return handleTripRSVP(req, res, tripRSVPMatch[1]);
 
-  // ── Shop / marketplace routes ────────────────────────────────────
-  if (url.startsWith('/api/shop/items') && method === 'GET')  return handleGetShopItems(req, res);
-  if (url === '/api/shop/sellers' && method === 'GET')         return handleGetShopSellers(req, res);
-  if (url === '/api/shop/orders' && method === 'POST')         return handlePlaceOrder(req, res);
-  if (url === '/api/shop/orders/mine' && method === 'GET')     return handleGetMyOrders(req, res);
-
-  // Venue admin shop routes
-  // Venue branding & public signup
-  if (url === '/api/venue/signup' && method === 'POST')           return handleVenueSignup(req, res);
-  if (url === '/api/venue-admin/branding' && method === 'GET')    return handleGetVenueBranding(req, res);
-  if (url === '/api/venue-admin/branding' && method === 'PUT')    return handleUpdateVenueBranding(req, res);
-  if (url === '/api/venue-admin/upload-image' && method === 'POST') return handleVenueImageUpload(req, res);
-
-  const pubVenueMatch = url.match(/^\/api\/venues\/([^/]+)\/public$/);
-  if (pubVenueMatch && method === 'GET') return handlePublicVenueProfile(req, res, pubVenueMatch[1]);
-
-  if (url === '/api/venue-admin/shop/items' && method === 'GET')    return handleVenueGetShopItems(req, res);
-  if (url === '/api/venue-admin/shop/items' && method === 'POST')   return handleVenueCreateShopItem(req, res);
-  if (url === '/api/venue-admin/shop/setup' && method === 'POST')   return handleVenueShopSetup(req, res);
-  if (url === '/api/venue-admin/shop/orders' && method === 'GET')   return handleVenueGetOrders(req, res);
-
-  const venueShopItemMatch = url.match(/^\/api\/venue-admin\/shop\/items\/([^/]+)$/);
-  if (venueShopItemMatch && method === 'PUT')    return handleVenueUpdateShopItem(req, res, venueShopItemMatch[1]);
-  if (venueShopItemMatch && method === 'DELETE') return handleVenueDeleteShopItem(req, res, venueShopItemMatch[1]);
-
-  const venueOrderMatch = url.match(/^\/api\/venue-admin\/shop\/orders\/([^/]+)$/);
-  if (venueOrderMatch && method === 'PUT') return handleVenueUpdateOrder(req, res, venueOrderMatch[1]);
-
-  const publicProfileMatch = url.match(/^\/api\/users\/([^/]+)\/public$/);
-  if (publicProfileMatch && method === 'GET') return handlePublicProfile(req, res, publicProfileMatch[1]);
-  if (url === '/api/user'         && method === 'DELETE') return handleDeleteUser(req, res);
-
-  // ── Wine CRUD ──────────────────────────────────────────────────
-  if (url === '/api/wines'        && method === 'GET')    return handleGetWines(req, res);
-  if (url === '/api/wines'        && method === 'POST')   return handleCreateWine(req, res);
-  const wineMatch = url.match(/^\/api\/wines\/([^/]+)$/);
-  if (wineMatch && method === 'PUT')    return handleUpdateWine(req, res, wineMatch[1]);
-  if (wineMatch && method === 'DELETE') return handleDeleteWine(req, res, wineMatch[1]);
-
-  const openBottleMatch = url.match(/^\/api\/wines\/([^/]+)\/open-bottle$/);
-  if (openBottleMatch && method === 'POST') return handleOpenBottle(req, res, openBottleMatch[1]);
-
-  const updateQtyMatch = url.match(/^\/api\/wines\/([^/]+)\/qty$/);
-  if (updateQtyMatch && method === 'PATCH') return handleUpdateQty(req, res, updateQtyMatch[1]);
-
-  // ── Blob storage ───────────────────────────────────────────────
+  // ── (7) WINES ──────────────────────────────────────────────
+  if (url === '/api/wines' && method === 'GET')  return handleGetWines(req, res);
+  if (url === '/api/wines' && method === 'POST') return handleCreateWine(req, res);
+  const wineOpenBottleMatch = ROUTES.wineOpenBottle.exec(url);
+  const wineQtyMatch        = ROUTES.wineQty.exec(url);
+  const wineMatch           = ROUTES.wine.exec(url);
+  if (wineOpenBottleMatch && method === 'POST')  return handleOpenBottle(req, res, wineOpenBottleMatch[1]);
+  if (wineQtyMatch        && method === 'PATCH') return handleUpdateQty(req, res, wineQtyMatch[1]);
+  if (wineMatch           && method === 'PUT')   return handleUpdateWine(req, res, wineMatch[1]);
+  if (wineMatch           && method === 'DELETE') return handleDeleteWine(req, res, wineMatch[1]);
   if (url === '/api/upload/label' && method === 'POST') return handleLabelUpload(req, res);
+  if (url === '/api/catalog/contribute' && method === 'POST') return handleCatalogContribute(req, res);
+  if (url.startsWith('/api/catalog/search') && method === 'GET') return handleCatalogSearch(req, res);
+  if (url === '/api/catalog/stats' && method === 'GET') return handleCatalogStats(req, res);
 
-  // ── PayPal ─────────────────────────────────────────────────────
-  if (url === '/api/paypal/webhook' && method === 'POST') return handlePayPalWebhook(req, res);
+  // ── (8) EDUCATION ──────────────────────────────────────────
+  if (url === '/api/education/progress' && method === 'GET')  return handleGetEducationProgress(req, res);
+  if (url === '/api/education/progress' && method === 'POST') return handleSaveEducationProgress(req, res);
+  if (url === '/api/education/explore'  && method === 'POST') return handleEducationExplore(req, res);
+  const eduContentMatch = ROUTES.eduContent.exec(url);
+  if (eduContentMatch) return handleGetEducationContent(req, res, eduContentMatch[1], eduContentMatch[2], eduContentMatch[3]);
 
-  // ── White-label config ─────────────────────────────────────────
-  if (url === '/config.js') {
-    const clientId = getClientId(req);
-    const clientCfg = path.join(__dirname, 'clients', clientId, 'config.js');
-    const defaultCfg = path.join(__dirname, 'clients', 'default', 'config.js');
-    fs.access(clientCfg, fs.constants.F_OK, e => {
-      const fp = e ? defaultCfg : clientCfg;
-      res.writeHead(200, { 'Content-Type': 'application/javascript' });
-      fs.createReadStream(fp).pipe(res);
-    });
-    return;
-  }
+  // ── (9) SHOP (public consumer) ─────────────────────────────
+  if (url.startsWith('/api/shop/items')  && method === 'GET')  return handleGetShopItems(req, res);
+  if (url === '/api/shop/sellers'        && method === 'GET')  return handleGetShopSellers(req, res);
+  if (url === '/api/shop/orders'         && method === 'POST') return handlePlaceOrder(req, res);
+  if (url === '/api/shop/orders/mine'    && method === 'GET')  return handleGetMyOrders(req, res);
 
-  // ── Venue API ──────────────────────────────────────────────────
-  const venueBase    = url.match(/^\/api\/venue\/([^/]+)$/);
-  const venueFeed    = url.match(/^\/api\/venue\/([^/]+)\/feed$/);
-  const venueRequest = url.match(/^\/api\/venue\/([^/]+)\/request$/);
-  const venueReview  = url.match(/^\/api\/venue\/([^/]+)\/review$/);
-  const venueJoin    = url.match(/^\/api\/venue\/([^/]+)\/member\/join$/);
+  // ── (10) VENUE (public consumer) ──────────────────────────
+  if (url === '/api/venue/signup' && method === 'POST') return handleVenueSignup(req, res);
+  const pubVenueMatch  = ROUTES.pubVenueProfile.exec(url);
+  const venueBase      = ROUTES.venueBase.exec(url);
+  const venueFeedR     = ROUTES.venueFeed.exec(url);
+  const venueRequestR  = ROUTES.venueRequest.exec(url);
+  const venueReviewR   = ROUTES.venueReview.exec(url);
+  const venueJoinR     = ROUTES.venueJoin.exec(url);
+  if (pubVenueMatch  && method === 'GET')  return handlePublicVenueProfile(req, res, pubVenueMatch[1]);
+  if (venueBase      && method === 'GET')  return handleGetVenue(req, res, venueBase[1]);
+  if (venueFeedR     && method === 'GET')  return handleGetFeed(req, res, venueFeedR[1]);
+  if (venueRequestR  && method === 'POST') return handleVenueRequest(req, res, venueRequestR[1]);
+  if (venueReviewR   && method === 'POST') return handleVenueReview(req, res, venueReviewR[1]);
+  if (venueJoinR     && method === 'POST') return handleVenueJoin(req, res, venueJoinR[1]);
 
-  if (venueBase    && method === 'GET')  return handleGetVenue(req, res, venueBase[1]);
-  if (venueFeed    && method === 'GET')  return handleGetFeed(req, res, venueFeed[1]);
-  if (venueRequest && method === 'POST') return handleVenueRequest(req, res, venueRequest[1]);
-  if (venueReview  && method === 'POST') return handleVenueReview(req, res, venueReview[1]);
-  if (venueJoin    && method === 'POST') return handleVenueJoin(req, res, venueJoin[1]);
-
-  // ── Venue Admin routes ──────────────────────────────────────────
-  if (url === '/api/venue-admin/login'  && method === 'POST') return handleVenueAdminLogin(req, res);
+  // ── (11) VENUE ADMIN ────────────────────────────────────────
+  // Auth
+  if (url === '/api/venue-admin/login'           && method === 'POST') return handleVenueAdminLogin(req, res);
   if (url === '/api/venue-admin/forgot-password' && method === 'POST') return handleVenueForgotPassword(req, res);
   if (url === '/api/venue-admin/reset-password'  && method === 'POST') return handleVenueResetPassword(req, res);
-  if (url === '/api/venue-admin/signup' && method === 'POST') return handleVenueAdminSignup(req, res);
-  if (url === '/api/venue-admin/members' && method === 'GET') return handleVenueAdminMembers(req, res);
+  if (url === '/api/venue-admin/signup'          && method === 'POST') return handleVenueAdminSignup(req, res);
+  // Branding & images
+  if (url === '/api/venue-admin/branding'        && method === 'GET')  return handleGetVenueBranding(req, res);
+  if (url === '/api/venue-admin/branding'        && method === 'PUT')  return handleUpdateVenueBranding(req, res);
+  if (url === '/api/venue-admin/upload-image'    && method === 'POST') return handleVenueImageUpload(req, res);
+  // Members
+  if (url === '/api/venue-admin/members'         && method === 'GET')  return handleVenueAdminMembers(req, res);
+  const venueMemberMatch = ROUTES.venueMember.exec(url);
+  if (venueMemberMatch && method === 'PATCH') return handleVenueAdminUpdateMember(req, res, venueMemberMatch[1]);
+  // Feed
+  if (url === '/api/venue-admin/feed'            && method === 'GET')  return handleVenueAdminGetFeed(req, res);
+  if (url === '/api/venue-admin/feed'            && method === 'POST') return handleVenueAdminCreateFeed(req, res);
+  const venueFeedItemMatch = ROUTES.venueFeedItem.exec(url);
+  if (venueFeedItemMatch && method === 'DELETE') return handleVenueAdminDeleteFeed(req, res, venueFeedItemMatch[1]);
+  // Requests & reviews
+  if (url === '/api/venue-admin/requests'        && method === 'GET')  return handleVenueAdminGetRequests(req, res);
+  const venueRequestItemMatch = ROUTES.venueRequestItem.exec(url);
+  if (venueRequestItemMatch && method === 'PATCH') return handleVenueAdminUpdateRequest(req, res, venueRequestItemMatch[1]);
+  if (url === '/api/venue-admin/reviews'         && method === 'GET')  return handleVenueAdminGetReviews(req, res);
+  const venueReviewItemMatch = ROUTES.venueReviewItem.exec(url);
+  if (venueReviewItemMatch && method === 'PATCH') return handleVenueAdminUpdateReview(req, res, venueReviewItemMatch[1]);
+  // Shop
+  if (url === '/api/venue-admin/shop/items'      && method === 'GET')  return handleVenueGetShopItems(req, res);
+  if (url === '/api/venue-admin/shop/items'      && method === 'POST') return handleVenueCreateShopItem(req, res);
+  if (url === '/api/venue-admin/shop/setup'      && method === 'POST') return handleVenueShopSetup(req, res);
+  if (url === '/api/venue-admin/shop/orders'     && method === 'GET')  return handleVenueGetOrders(req, res);
+  const venueShopItemMatch = ROUTES.venueShopItem.exec(url);
+  if (venueShopItemMatch && method === 'PUT')    return handleVenueUpdateShopItem(req, res, venueShopItemMatch[1]);
+  if (venueShopItemMatch && method === 'DELETE') return handleVenueDeleteShopItem(req, res, venueShopItemMatch[1]);
+  const venueOrderMatch = ROUTES.venueOrder.exec(url);
+  if (venueOrderMatch && method === 'PUT') return handleVenueUpdateOrder(req, res, venueOrderMatch[1]);
 
-  const memberMatch = url.match(/^\/api\/venue-admin\/members\/([^/]+)$/);
-  if (memberMatch && method === 'PATCH') return handleVenueAdminUpdateMember(req, res, memberMatch[1]);
+  // ── (12) WEBHOOKS ──────────────────────────────────────────
+  if (url === '/api/paypal/webhook' && method === 'POST') return handlePayPalWebhook(req, res);
 
-  if (url === '/api/venue-admin/feed' && method === 'GET')  return handleVenueAdminGetFeed(req, res);
-  if (url === '/api/venue-admin/feed' && method === 'POST') return handleVenueAdminCreateFeed(req, res);
+  // ── (13) SUPER-ADMIN ───────────────────────────────────────
+  if (url === '/api/superadmin/login'        && method === 'POST') return handleAdminLogin(req, res);
+  if (url === '/api/superadmin/setup'        && method === 'POST') return handleAdminSetup(req, res);
+  if (url === '/api/superadmin/overview'     && method === 'GET')  return handleAdminOverview(req, res);
+  if (url === '/api/superadmin/users'        && method === 'GET')  return handleAdminUsers(req, res);
+  if (url === '/api/superadmin/venues'       && method === 'GET')  return handleAdminVenues(req, res);
+  if (url === '/api/superadmin/catalog'      && method === 'GET')  return handleAdminCatalog(req, res);
+  if (url === '/api/superadmin/subscriptions'&& method === 'GET')  return handleAdminSubscriptions(req, res);
+  if (url === '/api/superadmin/orders'       && method === 'GET')  return handleAdminOrders(req, res);
+  if (url === '/api/superadmin/api-usage'    && method === 'GET')  return handleAdminApiUsage(req, res);
+  if (url === '/api/superadmin/education'    && method === 'GET')  return handleAdminEducation(req, res);
+  if (url === '/api/superadmin/admin-users'  && method === 'GET')  return handleAdminAdminUsers(req, res);
+  if (url === '/api/superadmin/admin-users'  && method === 'POST') return handleAdminCreateAdminUser(req, res);
 
-  const feedDelMatch = url.match(/^\/api\/venue-admin\/feed\/([^/]+)$/);
-  if (feedDelMatch && method === 'DELETE') return handleVenueAdminDeleteFeed(req, res, feedDelMatch[1]);
+  // ── (13) STATIC PAGES ──────────────────────────────────────
+  if (url === '/admin')        { fs.readFile(path.join(__dirname, 'venue-admin.html'),   (e, d) => { if(e) return err(res,500,'Not found'); res.writeHead(200,{'Content-Type':'text/html'}); res.end(d); }); return; }
+  if (url === '/superadmin')   { fs.readFile(path.join(__dirname, 'superadmin.html'),     (e, d) => { if(e) return err(res,500,'Not found'); res.writeHead(200,{'Content-Type':'text/html'}); res.end(d); }); return; }
+  if (url === '/venue-signup') { fs.readFile(path.join(__dirname, 'venue-signup.html'),  (e, d) => { if(e) return err(res,500,'Not found'); res.writeHead(200,{'Content-Type':'text/html'}); res.end(d); }); return; }
+  if (url === '/')             { fs.readFile(path.join(__dirname, 'gateway.html'),        (e, d) => { if(e) return err(res,500,'Not found'); res.writeHead(200,{'Content-Type':'text/html'}); res.end(d); }); return; }
+  if (url === '/consumer')     { fs.readFile(path.join(__dirname, 'index.html'),          (e, d) => { if(e) return err(res,500,'Not found'); res.writeHead(200,{'Content-Type':'text/html'}); res.end(d); }); return; }
+  if (url === '/venues')       { fs.readFile(path.join(__dirname, 'venue-landing.html'), (e, d) => { if(e) return err(res,500,'Not found'); res.writeHead(200,{'Content-Type':'text/html'}); res.end(d); }); return; }
+  if (url === '/join')         { fs.readFile(path.join(__dirname, HTML_FILE),            (e, d) => { if(e) return err(res,500,'Not found'); res.writeHead(200,{'Content-Type':'text/html'}); res.end(d); }); return; }
+  if (url === '/print-engine.js') { fs.readFile(path.join(__dirname, 'print-engine.js'), (e, d) => { if(e) return err(res,404,'Not found'); res.writeHead(200,{'Content-Type':'application/javascript'}); res.end(d); }); return; }
 
-  if (url === '/api/venue-admin/requests' && method === 'GET') return handleVenueAdminGetRequests(req, res);
-
-  const reqMatch = url.match(/^\/api\/venue-admin\/requests\/([^/]+)$/);
-  if (reqMatch && method === 'PATCH') return handleVenueAdminUpdateRequest(req, res, reqMatch[1]);
-
-  if (url === '/api/venue-admin/reviews' && method === 'GET') return handleVenueAdminGetReviews(req, res);
-
-  const reviewMatch = url.match(/^\/api\/venue-admin\/reviews\/([^/]+)$/);
-  if (reviewMatch && method === 'PATCH') return handleVenueAdminUpdateReview(req, res, reviewMatch[1]);
-
-  // ── Venue admin panel page ───────────────────────────────────────
-  if (url === '/admin') {
-    fs.readFile(path.join(__dirname, 'venue-admin.html'), (e, data) => {
-      if (e) return err(res, 500, 'Admin panel not found');
+  // Event public RSVP page
+  if (ROUTES.eventPage.test(url)) {
+    fs.readFile(path.join(__dirname, 'event.html'), (e, d) => {
+      if (e) return err(res, 500, 'Not found');
       res.writeHead(200, { 'Content-Type': 'text/html' });
-      res.end(data);
+      res.end(d);
     });
     return;
   }
-
 
   // Venue marketing material templates
-  const matMatch = url.match(/^\/(venue-material-[\w-]+\.html)$/);
+  const matMatch = ROUTES.venueMaterialPage.exec(url);
   if (matMatch) {
-    fs.readFile(path.join(__dirname, matMatch[1]), (e, data) => {
-      if (e) return err(res, 404, 'Template not found');
-      res.writeHead(200, { 'Content-Type': 'text/html' });
-      res.end(data);
-    });
-    return;
-  }
-
-  if (url === '/print-engine.js') {
-    fs.readFile(path.join(__dirname, 'print-engine.js'), (e, data) => {
+    fs.readFile(path.join(__dirname, matMatch[1]), (e, d) => {
       if (e) return err(res, 404, 'Not found');
-      res.writeHead(200, { 'Content-Type': 'application/javascript' });
-      res.end(data);
-    });
-    return;
-  }
-
-
-  if (url === '/venues') {
-    fs.readFile(path.join(__dirname, 'venue-landing.html'), (e, data) => {
-      if (e) return err(res, 500, 'Page not found');
       res.writeHead(200, { 'Content-Type': 'text/html' });
-      res.end(data);
-    });
-    return;
-  }
-  if (url === '/venue-signup') {
-    fs.readFile(path.join(__dirname, 'venue-signup.html'), (e, data) => {
-      if (e) return err(res, 500, 'Signup page not found');
-      res.writeHead(200, { 'Content-Type': 'text/html' });
-      res.end(data);
+      res.end(d);
     });
     return;
   }
 
-  // ── QR join deep link ──────────────────────────────────────────
-  if (url === '/join') {
-    fs.readFile(path.join(__dirname, HTML_FILE), (e, data) => {
-      if (e) return err(res, 500, 'Server error');
-      res.writeHead(200, { 'Content-Type': 'text/html' });
-      res.end(data);
+  // White-label config
+  if (url === '/config.js') {
+    const clientId  = req.headers['x-client-id'] || 'default';
+    const clientCfg = path.join(__dirname, 'clients', clientId, 'config.js');
+    const defaultCfg = path.join(__dirname, 'clients', 'default', 'config.js');
+    fs.readFile(clientCfg, (e, d) => {
+      if (e) fs.readFile(defaultCfg, (e2, d2) => {
+        if (e2) { res.writeHead(200, {'Content-Type':'application/javascript'}); res.end('const WL = {};'); return; }
+        res.writeHead(200, {'Content-Type':'application/javascript'}); res.end(d2);
+      });
+      else { res.writeHead(200, {'Content-Type':'application/javascript'}); res.end(d); }
     });
     return;
   }
 
-  // ── Local uploads (IONOS / development only) ───────────────────
+  // ── (14) LOCAL UPLOADS ─────────────────────────────────────
+  // Served only when USE_LOCAL_STORAGE is enabled (dev / IONOS)
   if (url.startsWith('/uploads/') && USE_LOCAL_STORAGE) {
-    const filePath = path.join(__dirname, url);
+    const filePath   = path.resolve(__dirname, url.slice(1));
+    const uploadsDir = path.resolve(__dirname, 'uploads');
+    if (!filePath.startsWith(uploadsDir + path.sep)) {
+      res.writeHead(403); res.end('Forbidden'); return;
+    }
+    const ext = path.extname(filePath).toLowerCase();
+    const safeImageTypes = new Set(['.jpg','.jpeg','.png','.gif','.webp']);
+    if (!safeImageTypes.has(ext)) { res.writeHead(403); res.end('Forbidden'); return; }
     fs.readFile(filePath, (e, data) => {
       if (e) return err(res, 404, 'Not found');
-      const ext = path.extname(filePath).toLowerCase();
       res.writeHead(200, { 'Content-Type': MIME[ext] || 'application/octet-stream' });
       res.end(data);
     });
     return;
   }
 
-  // ── Static files ───────────────────────────────────────────────
+  // ── (15) STATIC FILE HANDLER (catch-all) ───────────────────
   const filePath    = url === '/' ? HTML_FILE : url.slice(1);
-  const ext         = path.extname(filePath).toLowerCase();
+  const resolvedPath = path.resolve(__dirname, filePath);
+  const appRoot     = path.resolve(__dirname);
+  if (!resolvedPath.startsWith(appRoot + path.sep) && resolvedPath !== appRoot) {
+    res.writeHead(403); res.end('Forbidden'); return;
+  }
+  const ext         = path.extname(resolvedPath).toLowerCase();
   const contentType = MIME[ext] || 'text/plain';
 
-  fs.readFile(path.join(__dirname, filePath), (e, data) => {
-    if (e) { res.writeHead(404); res.end('Not found: ' + filePath); return; }
-
+  fs.readFile(resolvedPath, (e, data) => {
+    if (e) { res.writeHead(404); res.end('Not found'); return; }
     const compressible = ['text/html','text/javascript','application/javascript',
                           'text/css','application/json'].includes(contentType);
     const acceptsGzip  = (req.headers['accept-encoding']||'').includes('gzip');
-
     if (acceptsGzip && compressible) {
       zlib.gzip(data, (e2, compressed) => {
         if (e2) { res.writeHead(200,{'Content-Type':contentType}); res.end(data); return; }
@@ -2488,7 +3315,7 @@ if (SSL_CERT_PATH && SSL_KEY_PATH && fs.existsSync(SSL_CERT_PATH) && fs.existsSy
 
 server.listen(PORT, () => {
   const proto = isHttps ? 'https' : 'http';
-  console.log(`\n✅  CellarTrek Production Server — ${proto}://localhost:${PORT}`);
+  console.log(`\n✅  CellarTrek v15.0 — ${proto}://localhost:${PORT}`);
   if (!isHttps) {
     console.log('    ⚠️  Running on HTTP — camera access (QR scanner) only works on localhost,');
     console.log('       not a LAN IP. See README for HTTPS setup with mkcert.');
