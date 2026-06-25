@@ -1300,7 +1300,7 @@ async function callAI(prompt,sys,mt){
     const _timeout=setTimeout(()=>{if(_aiCtrl)_aiCtrl.abort();},15000);
     try{
       const res=await fetch("/api/anthropic",{
-        method:"POST",signal:_aiCtrl.signal,headers:{"Content-Type":"application/json"},
+        method:"POST",signal:_aiCtrl.signal,headers:{"Content-Type":"application/json","Authorization":"Bearer "+S.user.token},
         body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:mt,
           system:sys||"You are a master sommelier. Return ONLY valid JSON, no markdown, no preamble.",
           messages:[{role:"user",content:prompt}]})
@@ -1331,7 +1331,7 @@ async function callAIImg(prompt,b64,mt){
     const _timeout=setTimeout(()=>{if(_aiCtrl)_aiCtrl.abort();},15000);
     try{
       const res=await fetch("/api/anthropic",{
-        method:"POST",signal:_aiCtrl.signal,headers:{"Content-Type":"application/json"},
+        method:"POST",signal:_aiCtrl.signal,headers:{"Content-Type":"application/json","Authorization":"Bearer "+S.user.token},
         body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:mt,
           system:"You are a master sommelier with encyclopedic wine knowledge. Return ONLY valid JSON.",
           messages:[{role:"user",content:[
@@ -3413,7 +3413,7 @@ Respond in ${ln}. Be specific, reference their actual wines when relevant. Keep 
     const res = await fetch("/api/anthropic", {
       method:"POST",
       signal:_aiSommCtrl.signal,
-      headers:{"Content-Type":"application/json"},
+      headers:{"Content-Type":"application/json","Authorization":"Bearer "+S.user.token},
       body:JSON.stringify({
         model:"claude-sonnet-4-6",
         max_tokens:400,
