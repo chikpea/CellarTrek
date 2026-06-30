@@ -1,3 +1,27 @@
+# CellarTrek v15 → v16 — What changed in this release
+
+**New in v16.0**
+- **Wine Comparison** feature (consumer / blind / venue "closest match" with order capture).
+- **New endpoint** `GET /api/venue/:venueId/catalogue` (member-facing venue wine list).
+- **Billing moved from PayPal to Stripe** (PayPal is unavailable in much of Asia).
+  New env vars: `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRICE_PREMIUM`,
+  `STRIPE_PRICE_EXCLUSIVE`. Webhook route is now `POST /api/stripe/webhook`.
+- **Guest-RSVP duplication bug fixed** (DB + handler).
+
+**Database:** run the in-place migration ONCE on the existing production DB:
+```bash
+psql "$DATABASE_URL" -f migrate_v16.sql
+```
+(`schema.sql` is updated too, but that is only used for fresh installs.)
+
+**Stripe setup:** in the Stripe dashboard create the two Prices, then add a webhook
+endpoint pointing at `https://YOUR_HOST/api/stripe/webhook` and copy its signing
+secret into `STRIPE_WEBHOOK_SECRET`. The front-end Checkout button must pass
+`client_reference_id = <userId>` (and price metadata) so the webhook can map a
+payment to a user.
+
+---
+
 # CellarTrek v15 — Production Migration Guide
 ## IONOS Server: 66.179.241.138
 
