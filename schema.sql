@@ -14,10 +14,13 @@ CREATE TABLE users (
     lang                   VARCHAR(5)  DEFAULT 'en',
     plan                   VARCHAR(20) DEFAULT 'free',  -- free|premium|exclusive
     plan_expires_at        TIMESTAMPTZ,
-    paypal_subscription_id VARCHAR(255),
+    paypal_subscription_id VARCHAR(255),                 -- legacy (pre-Stripe); retained for in-flight subs
+    stripe_subscription_id VARCHAR(255),
+    stripe_customer_id     VARCHAR(255),
     created_at             TIMESTAMPTZ DEFAULT NOW()
 );
 CREATE INDEX idx_users_email ON users(email);
+CREATE INDEX IF NOT EXISTS idx_users_stripe_sub ON users(stripe_subscription_id);
 
 -- ── WINES ──────────────────────────────────────────────────────
 CREATE TABLE wines (
@@ -103,7 +106,9 @@ CREATE INDEX idx_reviews_venue ON member_reviews(venue_id, is_published);
 CREATE TABLE subscriptions (
     id                     UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id                UUID REFERENCES users(id),
-    paypal_subscription_id VARCHAR(255) UNIQUE,
+    paypal_subscription_id VARCHAR(255) UNIQUE,           -- legacy
+    stripe_subscription_id VARCHAR(255) UNIQUE,           -- webhook pivots on this
+    stripe_customer_id     VARCHAR(255),
     plan                   VARCHAR(20),
     status                 VARCHAR(20),
     amount_usd             DECIMAL(10,2),
@@ -119,7 +124,8 @@ CREATE TABLE payment_events (
     subscription_id UUID REFERENCES subscriptions(id),
     event_type      VARCHAR(50),
     amount_usd      DECIMAL(10,2),
-    paypal_event_id VARCHAR(255) UNIQUE,
+    paypal_event_id VARCHAR(255) UNIQUE,                  -- legacy
+    stripe_event_id VARCHAR(255) UNIQUE,                  -- idempotency: blocks double-credit on webhook retry
     qb_synced       BOOLEAN DEFAULT FALSE,
     created_at      TIMESTAMPTZ DEFAULT NOW()
 );
@@ -259,6 +265,11 @@ CREATE TABLE IF NOT EXISTS event_invitations (
 );
 CREATE INDEX IF NOT EXISTS idx_event_invitations_event ON event_invitations(event_id);
 CREATE INDEX IF NOT EXISTS idx_event_invitations_user ON event_invitations(user_id);
+-- Guest RSVP dedupe: members keyed on (event,user); guests on (event,email),
+-- since user_id IS NULL never conflicts (NULL != NULL). The server upserts
+-- on uq_event_inv_guest. Two partial indexes keep both cases unique.
+CREATE UNIQUE INDEX IF NOT EXISTS uq_event_inv_member ON event_invitations(event_id, user_id) WHERE user_id IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS uq_event_inv_guest  ON event_invitations(event_id, guest_email) WHERE user_id IS NULL AND guest_email IS NOT NULL;
 
 -- Group trips
 CREATE TABLE IF NOT EXISTS group_trips (

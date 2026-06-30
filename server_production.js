@@ -9,14 +9,16 @@
  *   ANTHROPIC_API_KEY   — Anthropic API key
  *   DATABASE_URL        — PostgreSQL connection string
  *   JWT_SECRET          — Random 256-bit string for signing tokens
- *   PAYPAL_CLIENT_ID    — PayPal app client ID
- *   PAYPAL_SECRET       — PayPal app secret
+ *   STRIPE_SECRET_KEY   — Stripe secret key (sk_live_… / sk_test_…)
+ *   STRIPE_WEBHOOK_SECRET — Stripe webhook signing secret (whsec_…)
+ *   STRIPE_PRICE_PREMIUM   — Stripe Price ID for the premium plan
+ *   STRIPE_PRICE_EXCLUSIVE — Stripe Price ID for the exclusive plan
  *   PORT                — Server port (default 8081)
  *   NODE_ENV            — "production" | "development"
  */
 
 'use strict';
-require('dotenv').config();  // Load .env file if present
+require('dotenv').config();
 const http    = require('http');
 const https   = require('https');
 const fs      = require('fs');
@@ -39,9 +41,10 @@ if (!JWT_SECRET) {
   process.exit(1);
 }
 const API_KEY        = process.env.ANTHROPIC_API_KEY;
-const PAYPAL_BASE    = process.env.NODE_ENV === 'production'
-  ? 'https://api-m.paypal.com'
-  : 'https://api-m.sandbox.paypal.com';
+const STRIPE_SECRET_KEY     = process.env.STRIPE_SECRET_KEY;
+const STRIPE_WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET;
+const STRIPE_PRICE_PREMIUM   = process.env.STRIPE_PRICE_PREMIUM;
+const STRIPE_PRICE_EXCLUSIVE = process.env.STRIPE_PRICE_EXCLUSIVE;
 
 const MIME = {
   '.html': 'text/html',   '.js':   'application/javascript',
@@ -171,6 +174,46 @@ function parseBody(req, cb) {
     try { cb(null, JSON.parse(body)); }
     catch(e) { cb(new Error('Invalid JSON'), null); }
   });
+}
+
+// Raw-body parser — Stripe webhook signatures are computed over the exact
+// raw request bytes, so we must NOT JSON.parse before verifying.
+function parseRawBody(req, cb) {
+  let chunks = [];
+  let size = 0, aborted = false;
+  req.on('data', chunk => {
+    if (aborted) return;
+    size += chunk.length;
+    if (size > MAX_BODY) { aborted = true; req.destroy(); cb(new Error('Payload too large'), null); return; }
+    chunks.push(chunk);
+  });
+  req.on('end', () => { if (!aborted) cb(null, Buffer.concat(chunks)); });
+}
+
+// Verify a Stripe webhook signature (t=…,v1=…) without the Stripe SDK.
+// Returns the parsed event on success, or null on any failure.
+function verifyStripeSignature(rawBody, sigHeader, secret, toleranceSec = 300) {
+  try {
+    if (!sigHeader || !secret) return null;
+    const parts = {};
+    sigHeader.split(',').forEach(kv => { const [k, v] = kv.split('='); if (k && v) { (parts[k] = parts[k] || []).push(v); } });
+    const t = (parts.t && parts.t[0]) || null;
+    const v1s = parts.v1 || [];
+    if (!t || !v1s.length) return null;
+    const age = Math.abs(Math.floor(Date.now() / 1000) - parseInt(t, 10));
+    if (isNaN(age) || age > toleranceSec) return null;
+    const signedPayload = `${t}.${rawBody.toString('utf8')}`;
+    const expected = crypto.createHmac('sha256', secret).update(signedPayload, 'utf8').digest('hex');
+    const expectedBuf = Buffer.from(expected, 'hex');
+    const ok = v1s.some(v1 => {
+      const vb = Buffer.from(v1, 'hex');
+      return vb.length === expectedBuf.length && crypto.timingSafeEqual(vb, expectedBuf);
+    });
+    if (!ok) return null;
+    return JSON.parse(rawBody.toString('utf8'));
+  } catch (e) {
+    return null;
+  }
 }
 
 // Send JSON response
@@ -836,10 +879,15 @@ async function handlePublicEventRsvp(req, res, token) {
       );
       if (!evRes.rows.length) return err(res, 404, 'Event not found');
       const eventId = evRes.rows[0].id;
+      // Guests have user_id = NULL, so (event_id, user_id) never conflicts
+      // (NULL != NULL in Postgres) and a guest could RSVP repeatedly. Dedupe on
+      // (event_id, guest_email) via partial unique index uq_event_inv_guest
+      // (see schema.sql). Update the RSVP on repeat.
       await db.query(
         `INSERT INTO event_invitations (event_id, user_id, guest_name, guest_email, rsvp, rsvp_at)
          VALUES ($1, NULL, $2, $3, $4, NOW())
-         ON CONFLICT (event_id, user_id) DO NOTHING`,
+         ON CONFLICT (event_id, guest_email) WHERE user_id IS NULL
+         DO UPDATE SET rsvp = EXCLUDED.rsvp, rsvp_at = NOW(), guest_name = EXCLUDED.guest_name`,
         [eventId, guestName, guestEmail||null, rsvp]
       );
       json(res, 200, { ok: true });
@@ -954,6 +1002,36 @@ async function handleGetShopItems(req, res) {
   } catch(e) { console.error('GetShopItems:', e.message); err(res, 500, 'Server error'); }
 }
 
+// ── GET /api/venue/:venueId/catalogue ─────────────────────────────
+// Member-facing read of a venue's sellable wine items, used by the
+// wine-comparison "venue closest match" mode. Returns active wine-category
+// shop_items for the venue (id, title, price, description, tags). Auth: any member.
+async function handleVenueCatalogue(req, res) {
+  const session = authenticate(req);
+  if (!session) return err(res, 401, 'Unauthorized');
+  const m = req.url.split('?')[0].match(/^\/api\/venue\/([^/]+)\/catalogue$/);
+  if (!m) return err(res, 400, 'venueId required');
+  const venueId = m[1];
+  try {
+    const sellerRes = await db.query(
+      `SELECT id FROM shop_sellers WHERE venue_id = $1 AND status = 'active'`, [venueId]
+    );
+    if (!sellerRes.rows.length) { json(res, 200, { venueId, items: [] }); return; }
+    const sellerId = sellerRes.rows[0].id;
+    const items = await db.query(
+      `SELECT id, title, description, price, currency, price_label, category,
+              tags, stock_qty, image_url
+         FROM shop_items
+        WHERE seller_id = $1 AND is_active = true
+          AND (stock_qty IS NULL OR stock_qty > 0)
+          AND category IN ('wine','wines')
+        ORDER BY is_featured DESC, sort_order ASC, created_at DESC`,
+      [sellerId]
+    );
+    json(res, 200, { venueId, items: items.rows });
+  } catch(e) { console.error('VenueCatalogue:', e.message); err(res, 500, 'Server error'); }
+}
+
 // ── GET /api/shop/sellers ─────────────────────────────────────────
 async function handleGetShopSellers(req, res) {
   try {
@@ -1047,89 +1125,118 @@ async function handleGetMyOrders(req, res) {
 
 // ── POST /api/venue/signup ────────────────────────────────────────
 // Public self-serve venue registration — no auth required
-// ── POST /api/paypal/webhook ─────────────────────────────────────
+// ── POST /api/stripe/webhook ─────────────────────────────────────
 
 // ══════════════════════════════════════════════════════════════
 // ── (8) WEBHOOKS ─────────────────────────────────────────────
 // ══════════════════════════════════════════════════════════════
 
-async function handlePayPalWebhook(req, res) {
-  parseBody(req, async (e, event) => {
+// Stripe subscription webhook. Replaces the former PayPal handler
+// (PayPal is unavailable in much of Asia; CellarTrek bills via Stripe).
+//
+// Idempotency: every Stripe event has a unique event.id, passed as
+// stripe_event_id into payment_events (UNIQUE constraint, see schema.sql), so
+// a redelivered webhook cannot double-credit a subscription.
+//
+// Security: the body is verified with the Stripe-Signature header against
+// STRIPE_WEBHOOK_SECRET over the RAW request bytes before any processing.
+async function handleStripeWebhook(req, res) {
+  parseRawBody(req, async (e, rawBody) => {
     if (e) return err(res, 400, 'Invalid webhook');
 
-    try {
-      if (event.event_type === 'BILLING.SUBSCRIPTION.ACTIVATED') {
-        const { id: subId, custom_id: userId } = event.resource;
-        // Determine plan from PayPal plan ID
-        const planId = event.resource.plan_id;
-        const plan = planId === process.env.PAYPAL_EXCLUSIVE_PLAN_ID ? 'exclusive' : 'premium';
-        const amount = plan === 'exclusive' ? 10.00 : 4.25;
+    const sig = req.headers['stripe-signature'];
+    const event = verifyStripeSignature(rawBody, sig, STRIPE_WEBHOOK_SECRET);
+    if (!event) { res.writeHead(400); res.end('Invalid signature'); return; }
 
-        const client = await db.connect();
-        try {
-          await client.query('BEGIN');
-          await client.query(
-            `UPDATE users SET plan=$1, plan_expires_at=NOW()+INTERVAL '1 month',
-             paypal_subscription_id=$2 WHERE id=$3`,
-            [plan, subId, userId]
-          );
-          await client.query(
-            `INSERT INTO subscriptions (user_id, paypal_subscription_id, plan, status, amount_usd, started_at)
-             VALUES ($1,$2,$3,'active',$4,NOW())`,
-            [userId, subId, plan, amount]
-          );
-          await client.query(
-            `INSERT INTO payment_events (user_id, event_type, amount_usd, paypal_event_id)
-             VALUES ($1,'subscription.activated',$2,$3)`,
-            [userId, amount, event.id]
-          );
-          await client.query('COMMIT');
-        } catch(e) {
-          await client.query('ROLLBACK');
-          throw e;
-        } finally {
-          client.release();
+    const planFromPrice = (priceId) =>
+      priceId === STRIPE_PRICE_EXCLUSIVE ? 'exclusive'
+      : priceId === STRIPE_PRICE_PREMIUM ? 'premium'
+      : 'premium';
+    const amountFromPlan = (plan) => (plan === 'exclusive' ? 10.00 : 4.25);
+
+    try {
+      if (event.type === 'checkout.session.completed') {
+        const s = event.data.object;
+        const userId   = s.client_reference_id || (s.metadata && s.metadata.userId) || null;
+        const subId    = s.subscription || null;
+        const custId   = s.customer || null;
+        const priceId  = (s.metadata && s.metadata.priceId) || null;
+        const plan     = planFromPrice(priceId);
+        const amount   = amountFromPlan(plan);
+        if (userId && subId) {
+          const client = await db.connect();
+          try {
+            await client.query('BEGIN');
+            await client.query(
+              `UPDATE users SET plan=$1, plan_expires_at=NOW()+INTERVAL '1 month',
+               stripe_subscription_id=$2, stripe_customer_id=$3 WHERE id=$4`,
+              [plan, subId, custId, userId]
+            );
+            await client.query(
+              `INSERT INTO subscriptions (user_id, stripe_subscription_id, stripe_customer_id, plan, status, amount_usd, started_at)
+               VALUES ($1,$2,$3,$4,'active',$5,NOW())
+               ON CONFLICT (stripe_subscription_id) DO UPDATE
+                 SET status='active', plan=EXCLUDED.plan`,
+              [userId, subId, custId, plan, amount]
+            );
+            await client.query(
+              `INSERT INTO payment_events (user_id, event_type, amount_usd, stripe_event_id)
+               VALUES ($1,'subscription.activated',$2,$3)
+               ON CONFLICT (stripe_event_id) DO NOTHING`,
+              [userId, amount, event.id]
+            );
+            await client.query('COMMIT');
+          } catch(txErr) {
+            await client.query('ROLLBACK');
+            throw txErr;
+          } finally {
+            client.release();
+          }
         }
       }
 
-      if (event.event_type === 'BILLING.SUBSCRIPTION.CANCELLED') {
-        const subId = event.resource.id;
+      if (event.type === 'customer.subscription.deleted') {
+        const subId = event.data.object.id;
         await db.query(
-          "UPDATE users SET plan='free', plan_expires_at=NULL WHERE paypal_subscription_id=$1",
+          "UPDATE users SET plan='free', plan_expires_at=NULL WHERE stripe_subscription_id=$1",
           [subId]
         );
         await db.query(
-          "UPDATE subscriptions SET status='cancelled' WHERE paypal_subscription_id=$1",
+          "UPDATE subscriptions SET status='cancelled' WHERE stripe_subscription_id=$1",
           [subId]
         );
       }
 
-      if (event.event_type === 'PAYMENT.SALE.COMPLETED') {
-        // Monthly recurring payment — record for QuickBooks sync
-        const subId = event.resource.billing_agreement_id;
-        const result = await db.query(
-          'SELECT user_id, plan, amount_usd FROM subscriptions WHERE paypal_subscription_id=$1',
-          [subId]
-        );
-        if (result.rows.length) {
-          const sub = result.rows[0];
-          await db.query(
-            `INSERT INTO payment_events (user_id, subscription_id, event_type, amount_usd, paypal_event_id)
-             SELECT id, $1, 'payment.completed', $2, $3 FROM subscriptions WHERE paypal_subscription_id=$4`,
-            [sub.id, sub.amount_usd, event.id, subId]
-          );
-          // Extend plan by 1 month
-          await db.query(
-            "UPDATE users SET plan_expires_at=GREATEST(plan_expires_at,NOW())+INTERVAL '1 month' WHERE paypal_subscription_id=$1",
+      if (event.type === 'invoice.paid') {
+        const inv = event.data.object;
+        const subId = inv.subscription || null;
+        if (subId) {
+          const result = await db.query(
+            'SELECT id, user_id, plan, amount_usd FROM subscriptions WHERE stripe_subscription_id=$1',
             [subId]
           );
+          if (result.rows.length) {
+            const sub = result.rows[0];
+            const ins = await db.query(
+              `INSERT INTO payment_events (user_id, subscription_id, event_type, amount_usd, stripe_event_id)
+               VALUES ($1,$2,'payment.completed',$3,$4)
+               ON CONFLICT (stripe_event_id) DO NOTHING`,
+              [sub.user_id, sub.id, sub.amount_usd, event.id]
+            );
+            if (ins.rowCount > 0) {
+              await db.query(
+                "UPDATE users SET plan_expires_at=GREATEST(plan_expires_at,NOW())+INTERVAL '1 month' WHERE stripe_subscription_id=$1",
+                [subId]
+              );
+            }
+          }
         }
       }
 
       res.writeHead(200);
-      res.end('OK');
-    } catch(e) {
-      console.error('PayPal webhook error:', e.message);
+      res.end(JSON.stringify({ received: true }));
+    } catch(txErr) {
+      console.error('Stripe webhook error:', txErr.message);
       res.writeHead(500);
       res.end('Error');
     }
@@ -3117,6 +3224,7 @@ const requestHandler = async (req, res) => {
   if (url === '/api/shop/sellers'        && method === 'GET')  return handleGetShopSellers(req, res);
   if (url === '/api/shop/orders'         && method === 'POST') return handlePlaceOrder(req, res);
   if (url === '/api/shop/orders/mine'    && method === 'GET')  return handleGetMyOrders(req, res);
+  if (/^\/api\/venue\/[^/]+\/catalogue$/.test(url) && method === 'GET') return handleVenueCatalogue(req, res);
 
   // ── (10) VENUE (public consumer) ──────────────────────────
   if (url === '/api/venue/signup' && method === 'POST') return handleVenueSignup(req, res);
@@ -3171,7 +3279,7 @@ const requestHandler = async (req, res) => {
   if (venueOrderMatch && method === 'PUT') return handleVenueUpdateOrder(req, res, venueOrderMatch[1]);
 
   // ── (12) WEBHOOKS ──────────────────────────────────────────
-  if (url === '/api/paypal/webhook' && method === 'POST') return handlePayPalWebhook(req, res);
+  if (url === '/api/stripe/webhook' && method === 'POST') return handleStripeWebhook(req, res);
 
   // ── (13) SUPER-ADMIN ───────────────────────────────────────
   if (url === '/api/superadmin/login'        && method === 'POST') return handleAdminLogin(req, res);
@@ -3315,7 +3423,7 @@ if (SSL_CERT_PATH && SSL_KEY_PATH && fs.existsSync(SSL_CERT_PATH) && fs.existsSy
 
 server.listen(PORT, () => {
   const proto = isHttps ? 'https' : 'http';
-  console.log(`\n✅  CellarTrek v15.0 — ${proto}://localhost:${PORT}`);
+  console.log(`\n✅  CellarTrek v16.0 — ${proto}://localhost:${PORT}`);
   if (!isHttps) {
     console.log('    ⚠️  Running on HTTP — camera access (QR scanner) only works on localhost,');
     console.log('       not a LAN IP. See README for HTTPS setup with mkcert.');

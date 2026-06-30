@@ -320,6 +320,80 @@ button, .btn-p, .btn-g, .btn-i, .btn-danger { min-height: 36px; }
 @media (min-width: 769px) {
   .detail-modal-overlay { display: none !important; }
 }
+/* ===== Wine Comparison tab ===== */
+.cmp-wrap{max-width:1000px;margin:0 auto;padding:20px 18px 60px}
+.cmp-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
+.cmp-head h2{font-size:26px;color:var(--cream);margin:0}
+.cmp-env{font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--gold);border:1px solid var(--border-hi);border-radius:999px;padding:4px 11px}
+.cmp-env.off{color:var(--cream-faint)}
+.cmp-sub{color:var(--cream-dim);font-size:14px;max-width:64ch;margin-bottom:20px}
+.cmp-modes{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:18px}
+.cmp-mode{flex:1;min-width:180px;display:flex;align-items:center;gap:9px;background:var(--bg-card);border:1px solid var(--border);border-radius:12px;padding:13px 15px;cursor:pointer;color:var(--cream-dim);font-family:var(--sans);font-size:13px;transition:.15s}
+.cmp-mode:hover{border-color:var(--border-hi)}
+.cmp-mode.on{border-color:var(--gold);color:var(--gold);background:var(--bg-deep)}
+.cmp-mi{font-size:16px}
+.cmp-slots{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px;margin-bottom:8px}
+.cmp-slot{background:var(--bg-card);border:1px solid var(--border);border-radius:14px;padding:14px;min-height:160px;display:flex;flex-direction:column;gap:10px}
+.cmp-slot.ref{border-color:rgba(80,150,130,.3)}
+.cmp-slot.cand{border-color:rgba(180,70,90,.32)}
+.cmp-slabel{font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--cream-faint);display:flex;justify-content:space-between;align-items:center}
+.cmp-x{background:none;border:none;color:var(--cream-faint);cursor:pointer;font-size:13px}
+.cmp-name{width:100%}
+.cmp-picker{display:flex;flex-wrap:wrap;gap:6px}
+.cmp-chip{font-size:11px;color:var(--cream-dim);background:var(--bg-deep);border:1px solid var(--border);border-radius:999px;padding:5px 9px;cursor:pointer;transition:.15s}
+.cmp-chip:hover{border-color:var(--gold);color:var(--gold)}
+.cmp-src{color:var(--cream-faint);font-size:9px;margin-left:5px;text-transform:uppercase}
+.cmp-hint{font-size:11px;color:var(--cream-faint);margin-top:auto}
+.cmp-filled{display:flex;flex-direction:column;gap:3px}
+.cmp-wn{font-size:17px;color:var(--cream);font-family:var(--serif)}
+.cmp-wm{font-size:11.5px;color:var(--cream-dim)}
+.cmp-add{display:flex;align-items:center;justify-content:center;text-align:center;border:1px dashed var(--border-hi);border-radius:14px;color:var(--cream-faint);cursor:pointer;font-size:13px;min-height:160px;background:none;font-family:var(--sans);padding:14px}
+.cmp-add:hover{border-color:var(--gold);color:var(--gold)}
+.cmp-actions{display:flex;gap:12px;margin:18px 0 6px;align-items:center}
+.cmp-reset{background:none;border:1px solid var(--border-hi);color:var(--cream-dim);font-size:12.5px;padding:11px 18px;border-radius:10px;cursor:pointer;font-family:var(--sans)}
+.cmp-loading{display:flex;align-items:center;gap:12px;color:var(--cream-dim);font-size:14px;margin-top:22px}
+.cmp-spin{width:18px;height:18px;border:2px solid var(--border);border-top-color:var(--gold);border-radius:50%;animation:spin .8s linear infinite}
+.cmp-verdict{background:var(--bg-card);border:1px solid var(--border);border-radius:16px;padding:20px 22px;margin-top:22px;border-left:5px solid var(--gold)}
+.cmp-verdict.try{border-left-color:#6fb98a}.cmp-verdict.maybe{border-left-color:#d99a4e}.cmp-verdict.skip{border-left-color:#cc6b6b}.cmp-verdict.match{border-left-color:var(--gold)}
+.cmp-vhead{display:flex;align-items:center;gap:13px;margin-bottom:11px;flex-wrap:wrap}
+.cmp-badge{font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;font-weight:600;padding:5px 12px;border-radius:999px;border:1px solid}
+.cmp-badge.try{color:#6fb98a;border-color:rgba(111,185,138,.4)}.cmp-badge.maybe{color:#d99a4e;border-color:rgba(217,154,78,.4)}.cmp-badge.skip{color:#cc6b6b;border-color:rgba(204,107,107,.4)}.cmp-badge.match{color:var(--gold);border-color:var(--gold-faint)}
+.cmp-sim{font-size:13px;color:var(--cream-dim)}.cmp-sim b{font-size:26px;color:var(--gold);font-family:var(--serif)}
+.cmp-aitag{margin-left:auto;font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--cream-faint)}
+.cmp-vtext{color:var(--cream-dim);font-size:14px;line-height:1.6}.cmp-vtext b{color:var(--cream)}
+.cmp-grid{background:var(--bg-card);border:1px solid var(--border);border-radius:14px;overflow:hidden;margin-top:16px}
+.cmp-gt{padding:13px 18px;font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--cream-faint);border-bottom:1px solid var(--border)}
+.cmp-table{width:100%;border-collapse:collapse}
+.cmp-table th,.cmp-table td{padding:11px 16px;text-align:left;font-size:13px;border-bottom:1px solid var(--border);vertical-align:top}
+.cmp-table thead th{background:var(--bg-deep)}
+.cmp-th-n{display:block;font-family:var(--serif);font-size:14px;color:var(--cream)}
+.cmp-th-r{font-size:9px;letter-spacing:.1em}.cmp-th-r.cand{color:var(--wine-light)}.cmp-th-r.ref{color:#5a9e8a}
+.cmp-attr{color:var(--cream-faint);font-size:10px;letter-spacing:.07em;text-transform:uppercase;width:120px}
+.cmp-val{color:var(--cream)}
+.cmp-bar{height:4px;background:var(--bg-deep);border-radius:2px;margin-top:5px;max-width:110px;overflow:hidden}.cmp-bar i{display:block;height:100%;background:var(--gold)}
+.cmp-dot{display:inline-block;width:7px;height:7px;border-radius:50%;margin-left:7px}.cmp-dot.same{background:#6fb98a}.cmp-dot.close{background:#d99a4e}.cmp-dot.diff{background:#cc6b6b}
+.cmp-reco{display:grid;grid-template-columns:1fr auto 1.3fr;gap:18px;align-items:start;background:var(--bg-card);border:1px solid var(--border);border-radius:14px;padding:20px;margin-top:16px}
+.cmp-rl,.cmp-rr{display:flex;flex-direction:column;gap:4px}
+.cmp-rk{font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--cream-faint)}.cmp-rk.gold{color:var(--gold)}
+.cmp-rn{font-family:var(--serif);font-size:20px;color:var(--cream)}.cmp-rn.dim{color:var(--cream-dim)}
+.cmp-rm{font-size:12px;color:var(--cream-dim)}
+.cmp-rx{font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:#cc6b6b;margin-top:3px}
+.cmp-rarrow{display:flex;align-items:center;color:var(--gold);font-size:22px}
+.cmp-pitch{display:flex;flex-wrap:wrap;gap:6px;margin:9px 0 12px}
+.cmp-pc{font-size:11px;color:var(--cream);background:var(--bg-deep);border:1px solid var(--border-hi);border-radius:999px;padding:5px 10px}.cmp-pc b{color:var(--gold)}
+.cmp-ord{background:var(--wine);color:#fff;border:none;font-family:var(--sans);font-size:13px;font-weight:600;padding:11px 18px;border-radius:9px;cursor:pointer;align-self:flex-start}.cmp-ord:hover{background:var(--wine-deep)}.cmp-ord.sm{padding:7px 12px;font-size:11.5px}
+.cmp-alts{background:var(--bg-card);border:1px solid var(--border);border-radius:14px;overflow:hidden;margin-top:16px}
+.cmp-alt{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:13px 18px;border-bottom:1px solid var(--border)}.cmp-alt:last-child{border-bottom:none}
+.cmp-an{font-family:var(--serif);font-size:15px;color:var(--cream);display:block}.cmp-am{font-size:11.5px;color:var(--cream-dim)}
+.cmp-altr{display:flex;align-items:center;gap:12px;flex:none}.cmp-asim{font-family:var(--serif);font-size:17px;color:var(--gold)}
+.cmp-tray{background:var(--bg-deep);border:1px solid var(--border-hi);border-radius:14px;padding:16px 18px;margin-top:14px}
+.cmp-th2{display:flex;justify-content:space-between;font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--cream-faint);padding-bottom:9px;border-bottom:1px solid var(--border);margin-bottom:8px}.cmp-tot{color:var(--gold);font-weight:600}
+.cmp-line{display:flex;align-items:center;gap:12px;padding:7px 0;font-size:13.5px}.cmp-ln{flex:1}.cmp-q{display:flex;align-items:center;gap:8px;color:var(--cream-dim)}
+.cmp-q button{width:22px;height:22px;border-radius:6px;border:1px solid var(--border-hi);background:var(--bg-card);color:var(--cream);cursor:pointer}
+.cmp-lp{width:56px;text-align:right;color:var(--cream)}
+.cmp-send{width:100%;margin-top:12px;background:var(--gold);color:#1a120c;border:none;font-family:var(--sans);font-weight:600;font-size:13px;padding:12px;border-radius:9px;cursor:pointer}
+.cmp-sent{margin-top:14px;color:#6fb98a;font-size:13px}
+@media(max-width:680px){.cmp-reco{grid-template-columns:1fr}.cmp-rarrow{transform:rotate(90deg)}}
 </style>
 <link rel="stylesheet" href="/lib/leaflet.css"/>
 </head>
@@ -399,7 +473,7 @@ const UI={
     importWineList:"Import Wine List",uploadCsv:"Upload a CSV",loadDemoWines:"Load My 20 Wines (Pre-Enriched Demo)",
     notesNoYet:"No notes yet — click Edit to add your impressions.",
     back:"← Back",next:"Next →",
-    navSommelier:"Sommelier",navShop:"Shop",navFriends:"Friends",navImport:"Import",navVenue:"Venue",navProfile:"Profile",navExit:"Exit",navLearn:"Learn",
+    navSommelier:"Sommelier",navShop:"Shop",navFriends:"Friends",navImport:"Import",navVenue:"Venue",navProfile:"Profile",navExit:"Exit",navLearn:"Learn",navCompare:"Compare",
   },
   es:{
     appName:"CellarTrek",
@@ -449,7 +523,7 @@ const UI={
     importWineList:"Importar Lista de Vinos",uploadCsv:"Cargar un CSV",loadDemoWines:"Cargar Mis 20 Vinos",
     notesNoYet:"Sin notas — haz clic en Editar para añadir tus impresiones.",
     back:"← Atrás",next:"Siguiente →",
-    navSommelier:"Sumiller",navShop:"Tienda",navFriends:"Amigos",navImport:"Importar",navVenue:"Lugar",navProfile:"Perfil",navExit:"Salir",navLearn:"Aprender"
+    navSommelier:"Sumiller",navShop:"Tienda",navFriends:"Amigos",navImport:"Importar",navVenue:"Lugar",navProfile:"Perfil",navExit:"Salir",navLearn:"Aprender",navCompare:"Comparar"
   },
   fr:{
     appName:"CellarTrek",
@@ -499,7 +573,7 @@ const UI={
     importWineList:"Importer une Liste de Vins",uploadCsv:"Charger un CSV",loadDemoWines:"Charger Mes 20 Vins",
     notesNoYet:"Pas de notes — cliquez sur Modifier pour ajouter vos impressions.",
     back:"← Retour",next:"Suivant →",
-    navSommelier:"Sommelier",navShop:"Boutique",navFriends:"Amis",navImport:"Importer",navVenue:"Lieu",navProfile:"Profil",navExit:"Quitter",navLearn:"Apprendre"
+    navSommelier:"Sommelier",navShop:"Boutique",navFriends:"Amis",navImport:"Importer",navVenue:"Lieu",navProfile:"Profil",navExit:"Quitter",navLearn:"Apprendre",navCompare:"Comparer"
   },
   it:{
     appName:"CellarTrek",
@@ -549,7 +623,7 @@ const UI={
     importWineList:"Importa Lista Vini",uploadCsv:"Carica un CSV",loadDemoWines:"Carica i Miei 20 Vini",
     notesNoYet:"Nessuna nota — clicca Modifica per aggiungere le tue impressioni.",
     back:"← Indietro",next:"Avanti →",
-    navSommelier:"Sommelier",navShop:"Negozio",navFriends:"Amici",navImport:"Importa",navVenue:"Locale",navProfile:"Profilo",navExit:"Esci",navLearn:"Impara"
+    navSommelier:"Sommelier",navShop:"Negozio",navFriends:"Amici",navImport:"Importa",navVenue:"Locale",navProfile:"Profilo",navExit:"Esci",navLearn:"Impara",navCompare:"Confronta"
   },
   de:{
     appName:"CellarTrek",
@@ -599,7 +673,7 @@ const UI={
     importWineList:"Weinliste importieren",uploadCsv:"CSV hochladen",loadDemoWines:"Meine 20 Weine laden",
     notesNoYet:"Keine Notizen — Bearbeiten klicken.",
     back:"← Zurück",next:"Weiter →",
-    navSommelier:"Sommelier",navShop:"Shop",navFriends:"Freunde",navImport:"Importieren",navVenue:"Ort",navProfile:"Profil",navExit:"Abmelden",navLearn:"Lernen"
+    navSommelier:"Sommelier",navShop:"Shop",navFriends:"Freunde",navImport:"Importieren",navVenue:"Ort",navProfile:"Profil",navExit:"Abmelden",navLearn:"Lernen",navCompare:"Vergleich"
   },
   zh:{
     appName:"品酒之旅",
@@ -649,7 +723,7 @@ const UI={
     importWineList:"导入葡萄酒列表",uploadCsv:"上传CSV",loadDemoWines:"加载我的20款葡萄酒",
     notesNoYet:"暂无笔记 — 点击编辑添加印象。",
     back:"← 返回",next:"下一步 →",
-    navSommelier:"侍酒师",navShop:"商店",navFriends:"好友",navImport:"导入",navVenue:"场所",navProfile:"个人",navExit:"退出",navLearn:"学习"
+    navSommelier:"侍酒师",navShop:"商店",navFriends:"好友",navImport:"导入",navVenue:"场所",navProfile:"个人",navExit:"退出",navLearn:"学习",navCompare:"对比"
   },
   ja:{
     appName:"ワインジャーニー",
@@ -699,7 +773,7 @@ const UI={
     importWineList:"ワインリストをインポート",uploadCsv:"CSVをアップロード",loadDemoWines:"20本のワインを読み込む",
     notesNoYet:"ノートなし — 編集をクリックして追加。",
     back:"← 戻る",next:"次へ →",
-    navSommelier:"ソムリエ",navShop:"ショップ",navFriends:"友達",navImport:"インポート",navVenue:"会場",navProfile:"プロフィール",navExit:"終了",navLearn:"学ぶ"
+    navSommelier:"ソムリエ",navShop:"ショップ",navFriends:"友達",navImport:"インポート",navVenue:"会場",navProfile:"プロフィール",navExit:"終了",navLearn:"学ぶ",navCompare:"比較"
   },
   tl:{
     appName:"CellarTrek",
@@ -749,7 +823,7 @@ const UI={
     importWineList:"Mag-import ng Listahan ng Alak",uploadCsv:"Mag-upload ng CSV",loadDemoWines:"I-load ang Aking 20 Alak",
     notesNoYet:"Walang tala — I-click ang I-edit para magdagdag.",
     back:"← Bumalik",next:"Susunod →",
-    navSommelier:"Sommelier",navShop:"Tindahan",navFriends:"Mga Kaibigan",navImport:"I-import",navVenue:"Lugar",navProfile:"Profile",navExit:"Lumabas",navLearn:"Matuto"
+    navSommelier:"Sommelier",navShop:"Tindahan",navFriends:"Mga Kaibigan",navImport:"I-import",navVenue:"Lugar",navProfile:"Profile",navExit:"Lumabas",navLearn:"Matuto",navCompare:"Ihambing"
   },
   ko:{
     appName:"와인 저니",
@@ -799,7 +873,7 @@ const UI={
     importWineList:"와인 목록 가져오기",uploadCsv:"CSV 업로드",loadDemoWines:"내 20개 와인 불러오기",
     notesNoYet:"노트 없음 — 편집을 클릭하여 추가하세요.",
     back:"← 뒤로",next:"다음 →",
-    navSommelier:"소믈리에",navShop:"상점",navFriends:"친구",navImport:"가져오기",navVenue:"장소",navProfile:"프로필",navExit:"나가기",navLearn:"배우기"
+    navSommelier:"소믈리에",navShop:"상점",navFriends:"친구",navImport:"가져오기",navVenue:"장소",navProfile:"프로필",navExit:"나가기",navLearn:"배우기",navCompare:"비교"
   },
 };
 function t(key){return(UI[S.lang]||UI.en)[key]||UI.en[key]||key;}
@@ -1178,6 +1252,7 @@ const CELLAR_IMG = (document.getElementById('_cimg')||{src:''}).src;
 let S={
   screen:"landing",tab:"cellar",lang:"en",showLangPicker:false,showCsv:false,mapRegion:null,regionSearch:"",showTravel:null,travelData:null,travelLoading:false,travelTab:"overview",showSommelier:false,showValuation:null,valuationData:null,valuationLoading:false,showAuction:null,auctionPkg:null,auctionLoading:false,drinkingWindowWine:null,drinkingWindowData:null,drinkingWindowLoading:false,pairingWine:null,pairingData:null,pairingLoading:false,showTripBuilder:false,itineraryData:null,itineraryLoading:false,selectedRegions:[],
   wines:[...loadCSVWines(),...DEMO_WINES,...WL_PRELOADED].map(w=>({...w})),
+  cmpMode:"consumer", cmpSlots:[{role:"cand",query:"",wine:null},{role:"ref",query:"",wine:null}], cmpResult:null, cmpLoading:false, cmpOrder:[],
   sel:null,selEditNotes:"",
   showAdd:false,step:1,
   showInvite:false,showTrade:null,
@@ -1300,7 +1375,7 @@ async function callAI(prompt,sys,mt){
     const _timeout=setTimeout(()=>{if(_aiCtrl)_aiCtrl.abort();},15000);
     try{
       const res=await fetch("/api/anthropic",{
-        method:"POST",signal:_aiCtrl.signal,headers:{"Content-Type":"application/json","Authorization":"Bearer "+S.user.token},
+        method:"POST",signal:_aiCtrl.signal,headers:{"Content-Type":"application/json","Authorization":"Bearer "+(S.user&&S.user.token||"")},
         body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:mt,
           system:sys||"You are a master sommelier. Return ONLY valid JSON, no markdown, no preamble.",
           messages:[{role:"user",content:prompt}]})
@@ -1331,7 +1406,7 @@ async function callAIImg(prompt,b64,mt){
     const _timeout=setTimeout(()=>{if(_aiCtrl)_aiCtrl.abort();},15000);
     try{
       const res=await fetch("/api/anthropic",{
-        method:"POST",signal:_aiCtrl.signal,headers:{"Content-Type":"application/json","Authorization":"Bearer "+S.user.token},
+        method:"POST",signal:_aiCtrl.signal,headers:{"Content-Type":"application/json","Authorization":"Bearer "+(S.user&&S.user.token||"")},
         body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:mt,
           system:"You are a master sommelier with encyclopedic wine knowledge. Return ONLY valid JSON.",
           messages:[{role:"user",content:[
@@ -3413,7 +3488,7 @@ Respond in ${ln}. Be specific, reference their actual wines when relevant. Keep 
     const res = await fetch("/api/anthropic", {
       method:"POST",
       signal:_aiSommCtrl.signal,
-      headers:{"Content-Type":"application/json","Authorization":"Bearer "+S.user.token},
+      headers:{"Content-Type":"application/json","Authorization":"Bearer "+(S.user&&S.user.token||"")},
       body:JSON.stringify({
         model:"claude-sonnet-4-6",
         max_tokens:400,
@@ -5448,12 +5523,321 @@ function renderLanding(){
   </div>`;
 }
 
+/* ===========================================================================
+   WINE COMPARISON MODULE  (consumer / blind / venue auto-scan + order capture)
+   Integrated into CellarTrek: reads S.wines, derives numeric axes from the
+   existing word fields (body/finish/grapes), uses callAI() when available and
+   an attribute fallback otherwise. Mirrors the standalone demo.
+   =========================================================================== */
+
+// Derive 0-5 structural axes from CellarTrek's existing descriptive fields.
+const CT_BODY_MAP={"very light":1,"light":1,"light-medium":2,"medium":3,"medium-full":4,"full":4,"very full":5,"full-bodied":4};
+function ctBody(w){ const b=(w.body||"").toLowerCase(); if(CT_BODY_MAP[b]!=null)return CT_BODY_MAP[b]; return 3; }
+function ctType(w){
+  const g=(w.grapes||[]).join(" ").toLowerCase();
+  if(/chardonnay|sauvignon|riesling|chenin|pinot gris|grigio|albari|viognier|gewurz|semillon/.test(g)) return "White";
+  if(/rosé|rose/.test(g)) return "Rosé";
+  if(/champagne|sparkl|cava|prosecco/.test((w.region||"").toLowerCase()+g)) return "Sparkling";
+  return "Red";
+}
+// Estimate acidity/tannin/sweetness from grape + type heuristics (offline only).
+function ctAxes(w){
+  const t=ctType(w); const g=(w.grapes||[]).join(" ").toLowerCase(); const r=(w.region||"").toLowerCase();
+  let acidity=3,tannin=t==="White"?0:3,sweetness=1;
+  if(/nebbiolo|sangiovese|barbera|gamay/.test(g))acidity=5;
+  if(/pinot noir|cabernet franc/.test(g))acidity=4;
+  if(/grenache|syrah|mourv|zinfandel|malbec/.test(g))acidity=3;
+  if(/nebbiolo|cabernet sauvignon|tannat|sangiovese/.test(g))tannin=Math.max(tannin,4);
+  if(/grenache|gamay|pinot/.test(g))tannin=Math.min(tannin,3);
+  if(t==="White"){acidity=/riesling|sauvignon|chenin|chablis|albari/.test(g+r)?5:4;}
+  if(/maury|port|sauternes|tokaji|ice wine|demi-sec|moelleux/.test(g+r))sweetness=3;
+  if(/riesling/.test(g)&&/mosel|kabinett|spat/.test(r))sweetness=2;
+  return {body:ctBody(w),acidity,tannin,sweetness,type:t};
+}
+function ctWineForCompare(w){
+  const ax=ctAxes(w);
+  return {
+    id:w.id, name:w.name, vintage:w.vintage, region:w.region,
+    grape:(w.grapes||[]).join(", "), type:ax.type,
+    body:ax.body, acidity:ax.acidity, tannin:ax.tannin, sweetness:ax.sweetness,
+    price:w.price!=null?w.price:null, score:w.rating!=null?w.rating:null,
+    window:(w.drinkWindowFrom&&w.drinkWindowTo)?`${w.drinkWindowFrom}–${w.drinkWindowTo}`:(w.finish||""),
+    src:w.venueId?"venue":(w.mode||"cellar")
+  };
+}
+function ctEstimateTyped(name){
+  // offline: no external DB; flag as unknown so UI suggests AI
+  return { name, src:"typed", region:"—", grape:"—", type:"Red",
+    body:3,acidity:3,tannin:3,sweetness:1,price:null,score:null,unknown:true };
+}
+
+const CMP_AXES=[["body",1],["acidity",1],["tannin",1],["sweetness",.7]];
+function cmpSim(a,b){
+  let tot=0,w=0;
+  for(const [k,wt] of CMP_AXES){ if(a[k]==null||b[k]==null)continue; tot+=(1-Math.abs(a[k]-b[k])/5)*wt; w+=wt; }
+  let s=w?tot/w:.5;
+  if(a.grape&&b.grape&&a.grape===b.grape)s=s*.8+.2;
+  s=(a.type&&b.type&&a.type===b.type)?Math.min(1,s+.05):s*.85;
+  if(a.region&&b.region&&a.region===b.region)s=Math.min(1,s+.05);
+  return Math.round(s*100);
+}
+function cmpAxisName(k){return ({body:"body",acidity:"acidity",tannin:"tannin/structure",sweetness:"sweetness"})[k];}
+function cmpClosest(a,b){let best="body",bd=9;CMP_AXES.forEach(([k])=>{if(a[k]!=null&&b[k]!=null){const d=Math.abs(a[k]-b[k]);if(d<bd){bd=d;best=k;}}});return cmpAxisName(best);}
+function cmpFarthest(a,b){let w="body",wd=-1;CMP_AXES.forEach(([k])=>{if(a[k]!=null&&b[k]!=null){const d=Math.abs(a[k]-b[k]);if(d>wd){wd=d;w=k;}}});return cmpAxisName(w);}
+
+// ---- data sources for the slots ----
+function cmpPool(){
+  const cellar=S.wines.filter(w=>w.mode==="cellar"&&!w.venueId).slice(0,8).map(ctWineForCompare);
+  const consumed=S.wines.filter(w=>w.mode==="consumed"&&!w.venueId).slice(0,8).map(ctWineForCompare);
+  const av=S.joinedVenues&&S.joinedVenues.length?S.joinedVenues.find(v=>v.id===S.activeVenueId)||S.joinedVenues[0]:null;
+  const venue=av?S.wines.filter(w=>w.venueId===av.id).map(ctWineForCompare):[];
+  return {cellar,consumed,venue};
+}
+function cmpResolve(slot){
+  if(slot.wine)return slot.wine;
+  const q=(slot.query||"").trim(); if(!q)return null;
+  return ctEstimateTyped(q);
+}
+
+// ---- attribute (offline) analysis ----
+function cmpLocal(wines,mode){
+  const cand=wines[0]; let best=0,bestRef=null;
+  for(let i=1;i<wines.length;i++){const s=cmpSim(cand,wines[i]);if(s>best){best=s;bestRef=wines[i];}}
+  const anyUnknown=wines.some(w=>w.unknown);
+  let verdict,badge,text;
+  if(anyUnknown){
+    // Honest: we can't truly score an unrecognised typed wine offline.
+    verdict="maybe"; badge="Need AI for this";
+    text=`One of these wines isn't in your collection, so offline I can't read its profile precisely — the attribute match would be guesswork. <b>Enable the AI sommelier</b> (available on IONOS) for an accurate comparison of <b>${cand.name}</b>.`;
+    return {similarity:null,verdict,badge,text,source:"attributes",wines,suppressSim:true};
+  }
+  if(mode==="blind"){
+    const ranked=[...wines].filter(w=>w.score).sort((a,b)=>(b.score)-(a.score));
+    const pick=ranked[0]||wines[0]; verdict="try"; badge="Best pick";
+    text=`These are ${best>70?"closely related":"fairly different"} styles. On balance <b>${pick.name}</b> looks like the standout. The ${best}% overlap means if you enjoy one you'll likely enjoy the other.`;
+  } else {
+    if(best>=72){verdict="try";badge="Worth trying";text=`<b>${cand.name}</b> is <b>${best}%</b> similar to <b>${bestRef.name}</b>, already in your world — same ${cmpClosest(cand,bestRef)}. If you enjoyed that, this is a rewarding bet.`;}
+    else if(best>=50){verdict="maybe";badge="A stretch";text=`<b>${cand.name}</b> shares some character with <b>${bestRef.name}</b> (<b>${best}%</b>) but differs on ${cmpFarthest(cand,bestRef)}. Try it if you're exploring beyond your usual.`;}
+    else{verdict="skip";badge="Different direction";text=`At <b>${best}%</b>, <b>${cand.name}</b> sits outside what you've enjoyed — notably ${cmpFarthest(cand,bestRef)}. Worth it only to branch out.`;}
+  }
+  return {similarity:best,verdict,badge,text,source:"attributes",wines};
+}
+
+// ---- AI analysis via callAI() ----
+async function cmpAI(wines,mode){
+  const modePrompt={
+    consumer:"The first wine is a CANDIDATE the user is considering. The rest are wines they OWN or have ENJOYED. Decide if they should try the candidate.",
+    blind:"All wines are ones the user has NOT tried and is choosing between. Recommend which to buy and note how alike they are."
+  }[mode];
+  const sys="You are a master sommelier. Compare wines and return ONLY valid JSON, no markdown. Shape: {\"similarity\":<0-100 int>,\"verdict\":\"try\"|\"maybe\"|\"skip\",\"badge\":\"<=3 words\",\"text\":\"2-3 sentence recommendation, may use <b> tags\",\"attributes\":[{\"name\":\"\",\"region\":\"\",\"grape\":\"\",\"type\":\"\",\"body\":0,\"acidity\":0,\"tannin\":0,\"sweetness\":0,\"price\":null,\"window\":\"\"}]}";
+  const user=modePrompt+"\n\nWines:\n"+wines.map((w,i)=>`${i+1}. ${w.name}${w.vintage?" "+w.vintage:""}`).join("\n");
+  const raw=await callAI(user,sys,1024); const p=JSON.parse(raw);
+  if(p.attributes)p.attributes.forEach((a,i)=>{if(wines[i])Object.assign(wines[i],{
+    region:wines[i].region&&wines[i].region!=="—"?wines[i].region:a.region,
+    grape:wines[i].grape&&wines[i].grape!=="—"?wines[i].grape:a.grape,
+    type:wines[i].type||a.type,body:wines[i].body??a.body,acidity:wines[i].acidity??a.acidity,
+    tannin:wines[i].tannin??a.tannin,sweetness:wines[i].sweetness??a.sweetness,
+    price:wines[i].price??a.price,window:wines[i].window||a.window});});
+  p.source="ai"; p.wines=wines; return p;
+}
+
+// ---- venue auto-scan ----
+function cmpValuePitch(req,m){
+  const bits=[];
+  if(req.price!=null&&m.price!=null){const d=req.price-m.price; if(d>=8)bits.push(`<b>$${m.price}</b> vs ~$${req.price} — about $${d} less`); else if(d<=-8)bits.push(`a step up at <b>$${m.price}</b>`); else bits.push(`comparably priced at <b>$${m.price}</b>`);}
+  else if(m.price!=null)bits.push(`<b>$${m.price}</b>`);
+  if(m.score){if(req.score&&m.score>=req.score-1)bits.push(`rated <b>${m.score}</b> — on par or better`);else bits.push(`critic score <b>${m.score}</b>`);}
+  bits.push("<b>in stock now</b>"); return bits;
+}
+// Fetch the venue's real sellable wine catalogue (shop_items, category=wine).
+// Returns comparison-shaped objects that CARRY itemId for real ordering.
+async function cmpFetchVenueCatalogue(){
+  const av=S.joinedVenues&&S.joinedVenues.length?(S.joinedVenues.find(v=>v.id===S.activeVenueId)||S.joinedVenues[0]):null;
+  if(!av)return [];
+  try{
+    const r=await fetch(`/api/venue/${av.id}/catalogue`,{headers:{"Authorization":"Bearer "+(S.user&&S.user.token)}});
+    if(!r.ok)return [];
+    const d=await r.json();
+    return (d.items||[]).map(it=>({
+      itemId:it.id, name:it.title, price:(it.price!=null?Number(it.price):null),
+      priceLabel:it.price_label||null, desc:it.description||"", tags:it.tags||[],
+      region:"", grape:"", type:"", body:null, acidity:null, tannin:null, sweetness:null, score:null,
+      src:"venue"
+    }));
+  }catch(e){ return []; }
+}
+// Offline fallback for venue mode: shop_items have no structured wine axes,
+// so we degrade to honest text/keyword overlap on title + tags + description.
+function cmpTextScore(req,m){
+  const q=((req.name||"")+" ").toLowerCase();
+  const hay=((m.name||"")+" "+(m.tags||[]).join(" ")+" "+(m.desc||"")).toLowerCase();
+  const toks=q.split(/[^a-z0-9]+/).filter(w=>w.length>3);
+  if(!toks.length)return 0;
+  let hit=0; toks.forEach(tk=>{ if(hay.includes(tk))hit++; });
+  return Math.round((hit/toks.length)*100);
+}
+function cmpVenueLocal(req,cat){
+  const ranked=cat.map(w=>({w,sim:cmpTextScore(req,w)})).sort((a,b)=>b.sim-a.sim);
+  const top=ranked[0]; const alts=ranked.slice(1,3).map(r=>r.w);
+  if(!top)return {error:"This venue has no wines listed to compare against yet."};
+  const pitch=cmpValuePitch(req,top.w);
+  const text=`Offline, I can only match <b>${req.name}</b> on listing text, so treat this as a rough steer: <b>${top.w.name}</b> looks like the nearest of what the venue carries. It's ${pitch.join(", ")}. <b>Enable the AI sommelier</b> for a true style match.`;
+  return {similarity:top.sim,best:top.w,alternatives:alts,badge:"Closest by name",pitch,text,source:"attributes",requested:req,rough:true};
+}
+async function cmpVenueAI(req,cat){
+  const sys="You are a master sommelier helping a venue. A guest requested a wine the venue does NOT stock. From ONLY the venue's list, pick the single most competitive substitute and up to 2 alternates. Be honest about closeness; favour comparable quality and good value in stock. Return ONLY valid JSON. Shape: {\"similarity\":0-100,\"bestName\":\"<exact name from list>\",\"altNames\":[\"\"],\"badge\":\"<=3 words\",\"text\":\"2-3 honest sentences, may use <b>\"}";
+  const user=`Guest requested: ${req.name}${req.vintage?" "+req.vintage:""}\n\nVenue's list (name | price | notes):\n`+cat.map(w=>`- ${w.name} | ${w.price!=null?"$"+w.price:(w.priceLabel||"NA")} | ${(w.desc||"").slice(0,80)}`).join("\n");
+  const raw=await callAI(user,sys,800); const p=JSON.parse(raw);
+  const best=cat.find(w=>w.name===p.bestName)||cat[0];
+  const alts=(p.altNames||[]).map(n=>cat.find(w=>w.name===n)).filter(Boolean);
+  return {similarity:p.similarity,best,alternatives:alts,badge:p.badge||"Recommended",pitch:cmpValuePitch(req,best),text:p.text,source:"ai",requested:req};
+}
+
+// ---- run ----
+async function cmpRun(){
+  S.cmpResult=null; S.cmpLoading=true; render();
+  try{
+    if(S.cmpMode==="venue"){
+      const reqSlot=S.cmpSlots.find(s=>s.wine||(s.query&&s.query.trim()));
+      const req=cmpResolve(reqSlot);
+      const cat=await cmpFetchVenueCatalogue();
+      if(!cat.length){S.cmpResult={error:"No venue wine catalogue available. Join a venue with a wine list to use this mode."};}
+      else{ let r=null; if(CMP_AI_OK){try{r=await cmpVenueAI(req,cat);}catch(e){r=null;}} if(!r)r=cmpVenueLocal(req,cat); S.cmpResult=r; }
+    } else {
+      const wines=S.cmpSlots.filter(s=>s.wine||(s.query&&s.query.trim())).map(cmpResolve);
+      if(wines.length<2){S.cmpLoading=false;render();return;}
+      let r=null; if(CMP_AI_OK){try{r=await cmpAI(wines,S.cmpMode);}catch(e){r=null;}} if(!r)r=cmpLocal(wines,S.cmpMode);
+      S.cmpResult=r;
+    }
+  }catch(e){ S.cmpResult={error:"Comparison failed. Please try again."}; }
+  S.cmpLoading=false; render();
+}
+
+// AI availability flag. Defaults on; falls back automatically if /api/anthropic
+// fails (e.g. residential LYSITHEA). Override via WL_AI_ENABLED if defined.
+let CMP_AI_OK = (typeof WL_AI_ENABLED!=="undefined")?!!WL_AI_ENABLED:true;
+
+// ---- order capture (venue) — items carry itemId from shop_items ----
+function cmpAddOrder(name){
+  const r=S.cmpResult; if(!r)return;
+  const w=[r.best,...(r.alternatives||[])].find(x=>x&&x.name===name); if(!w)return;
+  const ex=S.cmpOrder.find(o=>o.name===w.name); if(ex)ex.qty++; else S.cmpOrder.push({itemId:w.itemId,name:w.name,price:w.price||0,qty:1});
+  render();
+}
+function cmpOrderQty(name,d){const o=S.cmpOrder.find(x=>x.name===name);if(!o)return;o.qty+=d;if(o.qty<=0)S.cmpOrder=S.cmpOrder.filter(x=>x.name!==name);render();}
+async function cmpSendOrder(){
+  // Place each line via the real shop order endpoint (handles commission, stock, seller routing)
+  const lines=S.cmpOrder.filter(o=>o.itemId);
+  S.cmpLoading=true; render();
+  let ok=0,fail=0;
+  for(const o of lines){
+    try{
+      const r=await fetch("/api/shop/orders",{method:"POST",headers:{"Content-Type":"application/json","Authorization":"Bearer "+(S.user&&S.user.token)},
+        body:JSON.stringify({itemId:o.itemId, qty:o.qty})});
+      if(r.ok)ok++; else fail++;
+    }catch(e){ fail++; }
+  }
+  S.cmpLoading=false;
+  S.cmpOrder=[];
+  S.cmpResult=Object.assign({},S.cmpResult,{_sent:true,_sentMsg:fail?`Placed ${ok} item(s); ${fail} failed.`:`Order placed — ${ok} item(s) sent to the venue.`});
+  render();
+}
+
+/* ---- render: Compare tab ---- */
+function renderCompareTab(){
+  const modes=[["consumer","🍷","Against my wines"],["blind","⚖️","Help me choose"],["venue","🏛","Venue: closest match"]];
+  const pool=cmpPool();
+  const modeCards=modes.map(([m,ic,lbl])=>`
+    <button class="cmp-mode${S.cmpMode===m?" on":""}" data-cmpmode="${m}">
+      <span class="cmp-mi">${ic}</span><span class="cmp-ml">${lbl}</span>
+    </button>`).join("");
+
+  // slots
+  const isVenue=S.cmpMode==="venue";
+  const slotEls=S.cmpSlots.map((s,i)=>{
+    const isRef=s.role==="ref";
+    const label=isVenue?"Guest's request":(s.role==="ref"?(S.cmpMode==="consumer"?"From my wines":"Option"):(S.cmpMode==="consumer"?"Wine I'm considering":"Option"));
+    let inner=`<div class="cmp-slabel">${label}${S.cmpSlots.length>2?`<button class="cmp-x" data-cmprm="${i}">✕</button>`:""}</div>`;
+    if(s.wine){
+      inner+=`<div class="cmp-filled"><span class="cmp-wn">${s.wine.name}</span><span class="cmp-wm">${s.wine.vintage?s.wine.vintage+" · ":""}${s.wine.region||""}${s.wine.grape&&s.wine.grape!=="—"?" · "+s.wine.grape:""}</span></div><button class="cmp-chip" data-cmpclear="${i}">change</button>`;
+    } else {
+      inner+=`<input class="cmp-name inp" placeholder="Type a wine name…" value="${(s.query||"").replace(/"/g,"&quot;")}" data-cmpq="${i}">`;
+      const chips=[];
+      if(!isVenue && isRef){ pool.cellar.forEach(w=>chips.push([w,"cellar"])); pool.consumed.forEach(w=>chips.push([w,"consumed"])); }
+      if(chips.length)inner+=`<div class="cmp-picker">`+chips.map(([w,src])=>`<span class="cmp-chip" data-cmppick="${i}|${src}|${encodeURIComponent(w.name)}">${w.name}<span class="cmp-src">${src}</span></span>`).join("")+`</div>`;
+      else inner+=`<div class="cmp-hint">${isVenue?"Enter the wine the guest asked for.":"Type a wine name."}</div>`;
+    }
+    return `<div class="cmp-slot ${isRef?"ref":"cand"}">${inner}</div>`;
+  }).join("");
+
+  const addSlot=(!isVenue&&S.cmpSlots.length<3)?`<button class="cmp-add" id="cmp-add">＋ Add a third wine</button>`:"";
+  const venueNote=isVenue?`<div class="cmp-add" style="cursor:default;border-style:solid">🔎 We'll scan your venue's wine list and surface the most competitive in-stock match</div>`:"";
+
+  const result = S.cmpLoading
+    ? `<div class="cmp-loading"><span class="cmp-spin"></span>${CMP_AI_OK?"Asking the sommelier…":"Matching on attributes…"}</div>`
+    : (S.cmpResult? (isVenue?renderCmpVenueResult():renderCmpResult()) : "");
+
+  return `
+  <div class="cmp-wrap">
+    <div class="cmp-head"><h2 class="serif">Compare wines</h2><span class="cmp-env ${CMP_AI_OK?"":"off"}">${CMP_AI_OK?"AI sommelier":"Attribute mode"}</span></div>
+    <p class="cmp-sub">Line up two or three wines — a bottle you're considering against ones you own or have tasted, weigh options you've never tried, or find a venue's closest match to a request.</p>
+    <div class="cmp-modes">${modeCards}</div>
+    <div class="cmp-slots">${slotEls}${addSlot}${venueNote}</div>
+    <div class="cmp-actions"><button class="btn-g" id="cmp-go">${isVenue?"Find our best match":"Compare wines"}</button><button class="cmp-reset" id="cmp-reset">Reset</button></div>
+    ${result}
+  </div>`;
+}
+function renderCmpResult(){
+  const a=S.cmpResult; if(a.error)return `<div class="cmp-verdict"><div class="cmp-vtext">${a.error}</div></div>`;
+  const wines=a.wines||[]; const vc=a.verdict||"maybe";
+  const rows=[["Region","region"],["Grape","grape"],["Type","type"],["Body","body",1],["Acidity","acidity",1],["Tannin","tannin",1],["Sweetness","sweetness",1],["Score","score"],["Window","window"]];
+  const sw={body:["—","Very light","Light","Medium","Full","Very full"],acidity:["—","Low","Soft","Medium","Crisp","Racy"],tannin:["None","Soft","Light","Medium","Firm","Grippy"],sweetness:["Bone dry","Dry","Off-dry","Medium","Sweet","Lush"]};
+  const dot=(a0,b0,k)=>{if(a0[k]==null||b0[k]==null)return "";if(typeof a0[k]==="number"){const d=Math.abs(a0[k]-b0[k]);return `<span class="cmp-dot ${d===0?"same":d<=1?"close":"diff"}"></span>`;}return `<span class="cmp-dot ${a0[k]===b0[k]?"same":"diff"}"></span>`;};
+  const thead=`<tr><th>Attribute</th>${wines.map((w,i)=>`<th><span class="cmp-th-n">${w.name}</span><span class="cmp-th-r ${i===0?"cand":"ref"}">${i===0?(S.cmpMode==="blind"?"OPTION A":"CANDIDATE"):(S.cmpMode==="blind"?"OPTION":"YOUR WINE")}</span></th>`).join("")}</tr>`;
+  const tbody=rows.map(([lbl,k,bar])=>{
+    const tds=wines.map((w,wi)=>{
+      let v=w[k]; if(v==null||v==="")v="—";
+      if(bar&&typeof w[k]==="number"){const d=wi>0?dot(wines[0],w,k):"";return `<td><span class="cmp-val">${(sw[k]&&sw[k][w[k]]!=null)?sw[k][w[k]]:w[k]}${d}</span><div class="cmp-bar"><i style="width:${(w[k]/5)*100}%"></i></div></td>`;}
+      if(k==="score")return `<td><span class="cmp-val">${w.score!=null?w.score:"—"}</span></td>`;
+      const d=(wi>0&&(k==="grape"||k==="type"||k==="region"))?dot(wines[0],w,k):"";
+      return `<td><span class="cmp-val">${v}</span>${d}</td>`;
+    }).join("");
+    return `<tr><td class="cmp-attr">${lbl}</td>${tds}</tr>`;
+  }).join("");
+  return `
+    <div class="cmp-verdict ${vc}">
+      <div class="cmp-vhead"><span class="cmp-badge ${vc}">${a.badge||"Result"}</span>${a.suppressSim?"":`<span class="cmp-sim"><b>${a.similarity}%</b> similar</span>`}<span class="cmp-aitag ${a.source==="ai"?"":"fb"}">${a.source==="ai"?"AI sommelier":"attribute match"}</span></div>
+      <div class="cmp-vtext">${a.text}</div>
+    </div>
+    <div class="cmp-grid"><div class="cmp-gt">Side by side</div><table class="cmp-table"><thead>${thead}</thead><tbody>${tbody}</tbody></table></div>`;
+}
+function renderCmpVenueResult(){
+  const a=S.cmpResult; if(a.error)return `<div class="cmp-verdict"><div class="cmp-vtext">${a.error}</div></div>`;
+  const req=a.requested, best=a.best;
+  const altMeta=w=>[w.priceLabel||(w.price!=null?"$"+w.price:""), (w.desc||"").slice(0,60)].filter(Boolean).join(" · ");
+  const alts=(a.alternatives||[]).map(w=>`<div class="cmp-alt"><div><span class="cmp-an">${w.name}</span><span class="cmp-am">${altMeta(w)}</span></div><div class="cmp-altr"><button class="cmp-ord sm" data-cmporder="${encodeURIComponent(w.name)}">+ Order</button></div></div>`).join("");
+  const order=S.cmpOrder.length?`<div class="cmp-tray"><div class="cmp-th2"><span>Order</span><span class="cmp-tot">$${S.cmpOrder.reduce((t,o)=>t+o.price*o.qty,0)}</span></div>${S.cmpOrder.map(o=>`<div class="cmp-line"><span class="cmp-ln">${o.name}</span><span class="cmp-q"><button data-cmpqty="${encodeURIComponent(o.name)}|-1">−</button>${o.qty}<button data-cmpqty="${encodeURIComponent(o.name)}|1">+</button></span><span class="cmp-lp">$${o.price*o.qty}</span></div>`).join("")}<button class="cmp-send" id="cmp-send">Place order →</button></div>`:(a._sent?`<div class="cmp-sent">✓ ${a._sentMsg||"Order placed."}</div>`:"");
+  const simHtml=(a.similarity!=null&&!a.rough)?`<span class="cmp-sim"><b>${a.similarity}%</b> match</span>`:(a.rough?`<span class="cmp-sim" style="color:var(--cream-faint)">rough</span>`:"");
+  return `
+    <div class="cmp-verdict match">
+      <div class="cmp-vhead"><span class="cmp-badge match">${a.badge||"Recommended"}</span>${simHtml}<span class="cmp-aitag ${a.source==="ai"?"":"fb"}">${a.source==="ai"?"AI sommelier":"text match"}</span></div>
+      <div class="cmp-vtext">${a.text}</div>
+    </div>
+    <div class="cmp-reco">
+      <div class="cmp-rl"><span class="cmp-rk">Requested</span><span class="cmp-rn dim">${req.name}</span><span class="cmp-rx">not in stock</span></div>
+      <div class="cmp-rarrow">→</div>
+      <div class="cmp-rr"><span class="cmp-rk gold">Recommend instead</span><span class="cmp-rn">${best.name}</span><span class="cmp-rm">${best.priceLabel||(best.desc||"").slice(0,80)}</span><div class="cmp-pitch">${(a.pitch||[]).map(p=>`<span class="cmp-pc">${p}</span>`).join("")}</div><button class="cmp-ord" data-cmporder="${encodeURIComponent(best.name)}">Add to order${best.price!=null?" · $"+best.price:""}</button></div>
+    </div>
+    ${alts?`<div class="cmp-alts"><div class="cmp-gt">Other options you carry</div>${alts}</div>`:""}
+    ${order}`;
+}
+
 function renderNavbar(){
   const lang=getLang();
   return`<div class="navbar-inner" style="display:flex;align-items:center;justify-content:space-between;padding:13px 22px;background:rgba(30,12,16,.95);border-bottom:2px solid var(--border);position:sticky;top:0;z-index:100;backdrop-filter:blur(8px)">
     <div style="display:flex;align-items:baseline;gap:7px">
       <div class="serif" style="font-size:22px;color:var(--cream);cursor:pointer" id="logo-home">${WL_LOGO?`<img src="${WL_LOGO}" style="height:28px;object-fit:contain;max-width:160px" alt="${WL_NAME}"/>`:`<span style="color:var(--gold)">${WL_NAME.split(" ")[0]}</span>${WL_NAME.split(" ").slice(1).join(" ")||""}`}</div>
-      <span style="font-size:9px;color:var(--cream-faint);letter-spacing:.08em;font-family:var(--sans)">v15.0</span>
+      <span style="font-size:9px;color:var(--cream-faint);letter-spacing:.08em;font-family:var(--sans)">v16.0</span>
     </div>
 
     <!-- Desktop: full action row -->
@@ -6282,6 +6666,7 @@ function render(){
   else if(tab==="trade") mainContent=renderTradeTab();
   else if(tab==="travel") mainContent=renderTravelTab();
   else if(tab==="learn")  mainContent=renderLearnTab();
+  else if(tab==="compare") mainContent=renderCompareTab();
   else if(tab==="shop") mainContent=renderShopTab();
   else{
     const list=tab==="cellar"?cellar:consumed;
@@ -6294,7 +6679,7 @@ function render(){
       ${renderNavbar()}
       ${renderStats()}
       <div class="tab-bar">
-        ${[["cellar","🍾 "+t("cellar")],["consumed","✓ "+t("consumed")],["map","🗺 "+t("map")],...(WL_SHOW_TRADE?[["trade","🔄 "+t("trade")]]:[[]]),...(WL_SHOW_TRAVEL?[["travel","✈️ "+t("travel")]]:[[]]),...(S.joinedVenues.length?[["venues","🏛 "+t("venues")]]:[]),["learn","🎓 "+t("navLearn")]].map(([tabId,tabLabel])=>`
+        ${[["cellar","🍾 "+t("cellar")],["consumed","✓ "+t("consumed")],["compare","⚖ "+t("navCompare")],["map","🗺 "+t("map")],...(WL_SHOW_TRADE?[["trade","🔄 "+t("trade")]]:[[]]),...(WL_SHOW_TRAVEL?[["travel","✈️ "+t("travel")]]:[[]]),...(S.joinedVenues.length?[["venues","🏛 "+t("venues")]]:[]),["learn","🎓 "+t("navLearn")]].map(([tabId,tabLabel])=>`
           <div class="tab${tab===tabId?" active":""}" data-tab="${tabId}">${tabLabel}${tabId==="trade"?`<span style="margin-left:5px;background:var(--wine-light);color:#fff;font-size:9px;padding:1px 5px;border-radius:10px">${TRADE_LISTINGS.length}</span>`:""}</div>`).join("")}
       </div>
       ${(sel && (tab==='cellar'||tab==='consumed')) ? `
@@ -6450,7 +6835,30 @@ on("share-btn",()=>{S.showInvite=true;S.socialTab="profile";S.invSent=false;if(S
     render();
   });
 
-  // ── Social tab handlers ──────────────────────────────────────────
+  // ── Compare tab handlers ─────────────────────────────────────────
+  document.querySelectorAll("[data-cmpmode]").forEach(e=>e.onclick=()=>{
+    S.cmpMode=e.dataset.cmpmode;
+    S.cmpSlots = S.cmpMode==="venue" ? [{role:"cand",query:"",wine:null}]
+      : S.cmpMode==="blind" ? [{role:"cand",query:"",wine:null},{role:"cand",query:"",wine:null}]
+      : [{role:"cand",query:"",wine:null},{role:"ref",query:"",wine:null}];
+    S.cmpResult=null; S.cmpOrder=[]; render();
+  });
+  document.querySelectorAll("[data-cmpq]").forEach(e=>e.oninput=()=>{ S.cmpSlots[+e.dataset.cmpq].query=e.value; });
+  document.querySelectorAll("[data-cmpq]").forEach(e=>e.onkeydown=(ev)=>{ if(ev.key==="Enter"){const i=+e.dataset.cmpq;const q=(e.value||"").trim();if(q){S.cmpSlots[i].wine=ctEstimateTyped(q);S.cmpSlots[i].query="";render();}} });
+  document.querySelectorAll("[data-cmppick]").forEach(e=>e.onclick=()=>{
+    const [i,src,enc]=e.dataset.cmppick.split("|"); const name=decodeURIComponent(enc);
+    const p=cmpPool(); const all=[...p.cellar,...p.consumed,...p.venue];
+    const w=all.find(x=>x.name===name&&x.src===src); if(w){S.cmpSlots[+i].wine=w;S.cmpSlots[+i].query="";} render();
+  });
+  document.querySelectorAll("[data-cmpclear]").forEach(e=>e.onclick=()=>{const i=+e.dataset.cmpclear;S.cmpSlots[i].wine=null;S.cmpSlots[i].query="";render();});
+  document.querySelectorAll("[data-cmprm]").forEach(e=>e.onclick=()=>{S.cmpSlots.splice(+e.dataset.cmprm,1);render();});
+  on("cmp-add",()=>{S.cmpSlots.push({role:"cand",query:"",wine:null});render();});
+  on("cmp-go",()=>{cmpRun();});
+  on("cmp-reset",()=>{const m=S.cmpMode;S.cmpResult=null;S.cmpOrder=[];document.querySelector("[data-cmpmode='"+m+"']")&&document.querySelector("[data-cmpmode='"+m+"']").click();
+    S.cmpSlots=m==="venue"?[{role:"cand",query:"",wine:null}]:m==="blind"?[{role:"cand",query:"",wine:null},{role:"cand",query:"",wine:null}]:[{role:"cand",query:"",wine:null},{role:"ref",query:"",wine:null}];render();});
+  document.querySelectorAll("[data-cmporder]").forEach(e=>e.onclick=()=>{cmpAddOrder(decodeURIComponent(e.dataset.cmporder));});
+  document.querySelectorAll("[data-cmpqty]").forEach(e=>e.onclick=()=>{const [enc,d]=e.dataset.cmpqty.split("|");cmpOrderQty(decodeURIComponent(enc),+d);});
+  on("cmp-send",()=>{cmpSendOrder();});
   document.querySelectorAll(".social-tab-btn").forEach(e=>e.onclick=()=>{S.socialTab=e.dataset.stab;render();});
   document.querySelectorAll(".social-group-tab").forEach(e=>e.onclick=()=>{S.groupDetailTab=e.dataset.gtab;render();});
 
