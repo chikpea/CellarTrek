@@ -18,7 +18,7 @@
  */
 
 'use strict';
-require('dotenv').config();
+require('dotenv').config();  // Load .env file if present
 const http    = require('http');
 const https   = require('https');
 const fs      = require('fs');
@@ -28,6 +28,7 @@ const zlib    = require('zlib');
 
 // ── npm dependencies ─────────────────────────────────────────────
 const { Pool }       = require('pg');
+const brandingWorker = require('./branding-worker.js');
 const bcrypt         = require('bcrypt');
 const jwt            = require('jsonwebtoken');
 
@@ -1311,6 +1312,51 @@ async function handleVenueImageUpload(req, res) {
   });
 }
 
+// ── POST /api/venue-admin/branding/extract ───────────────────────
+// Spawns the standalone branding-worker.js as a child process to render the
+// venue's site headlessly and return a draft theme (colors/fonts/logo/hero)
+// for confirmation. The worker writes nothing to the DB — it returns JSON;
+// the draft is persisted only after the venue confirms via the normal PUT.
+// SSRF guard: the venue supplies the URL, so it is untrusted. We validate with
+// the worker's exported validateUrl (http/https only, no localhost / private /
+// reserved / IPv6) BEFORE spawning — defense in depth alongside the worker's
+// own check (spec §1.2).
+async function handleBrandingExtract(req, res) {
+  const session = authenticate(req, 'venue');
+  if (!session) return err(res, 401, 'Unauthorized');
+  parseBody(req, (e, body) => {
+    if (e) return err(res, 400, 'Invalid request');
+    if (!body || !body.url) return err(res, 400, 'url required');
+
+    const check = brandingWorker.validateUrl(body.url);
+    if (!check.ok) return err(res, 400, check.reason || 'Invalid URL');
+
+    const { execFile } = require('child_process');
+    const workerPath = path.join(__dirname, 'branding-worker.js');
+    execFile(
+      'node',
+      [workerPath, check.url],
+      { timeout: 30000, maxBuffer: 4 * 1024 * 1024 },
+      (execErr, stdout, stderr) => {
+        if (execErr && execErr.killed) {
+          console.error('BrandingExtract: worker timed out');
+          return err(res, 504, 'Extraction timed out');
+        }
+        let parsed;
+        try { parsed = JSON.parse(stdout); }
+        catch (_) {
+          console.error('BrandingExtract: bad worker output', (stderr||'').slice(0, 300));
+          return err(res, 502, 'Extraction failed');
+        }
+        if (!parsed.ok) {
+          return err(res, 502, parsed.error || 'Extraction failed');
+        }
+        json(res, 200, parsed.theme);
+      }
+    );
+  });
+}
+
 async function handleGetVenueBranding(req, res) {
   const session = authenticate(req, 'venue');
   if (!session) return err(res, 401, 'Unauthorized');
@@ -1372,7 +1418,10 @@ async function handlePublicVenueProfile(req, res, venueId) {
        LEFT JOIN shop_sellers ss ON ss.venue_id = va.venue_id AND ss.status='active'
        LEFT JOIN shop_items si ON si.seller_id = ss.id AND si.is_active=true
        WHERE va.venue_id=$1
-       GROUP BY va.venue_id`,
+       GROUP BY va.venue_id, va.venue_name, va.logo_url, va.cover_url, va.brand_color,
+                va.description, va.address, va.city, va.country, va.phone,
+                va.website, va.instagram, va.facebook, va.opening_hours, va.venue_type,
+                va.is_public, va.created_at`,
       [venueId]
     );
     if (!result.rows.length) return err(res, 404, 'Venue not found');
@@ -3248,6 +3297,7 @@ const requestHandler = async (req, res) => {
   if (url === '/api/venue-admin/reset-password'  && method === 'POST') return handleVenueResetPassword(req, res);
   if (url === '/api/venue-admin/signup'          && method === 'POST') return handleVenueAdminSignup(req, res);
   // Branding & images
+  if (url === '/api/venue-admin/branding/extract' && method === 'POST') return handleBrandingExtract(req, res);
   if (url === '/api/venue-admin/branding'        && method === 'GET')  return handleGetVenueBranding(req, res);
   if (url === '/api/venue-admin/branding'        && method === 'PUT')  return handleUpdateVenueBranding(req, res);
   if (url === '/api/venue-admin/upload-image'    && method === 'POST') return handleVenueImageUpload(req, res);
@@ -3423,7 +3473,7 @@ if (SSL_CERT_PATH && SSL_KEY_PATH && fs.existsSync(SSL_CERT_PATH) && fs.existsSy
 
 server.listen(PORT, () => {
   const proto = isHttps ? 'https' : 'http';
-  console.log(`\n✅  CellarTrek v16.0 — ${proto}://localhost:${PORT}`);
+  console.log(`\n✅  CellarTrek v17.0 — ${proto}://localhost:${PORT}`);
   if (!isHttps) {
     console.log('    ⚠️  Running on HTTP — camera access (QR scanner) only works on localhost,');
     console.log('       not a LAN IP. See README for HTTPS setup with mkcert.');
