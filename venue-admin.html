@@ -260,6 +260,7 @@ let BRANDING = null;
 let BRANDING_DRAFT = {};
 let BRANDING_SAVING = false;
 let BRANDING_SAVED = false;
+let EXTRACT_STATE = { running: false, error: '', result: null, url: '' };
 
 // ════════════════════════════════════════════════════════════════
 // API HELPERS
@@ -876,6 +877,51 @@ function wireEvents() {
     BRANDING_SAVING = false; render();
   };
 
+  // ── Website import (extraction + confirmation) ───────────────────
+  const extractUrlEl = document.getElementById('extract-url');
+  if (extractUrlEl) extractUrlEl.oninput = () => { EXTRACT_STATE.url = extractUrlEl.value; };
+
+  const extractBtn = document.getElementById('extract-btn');
+  if (extractBtn) extractBtn.onclick = async () => {
+    const urlEl = document.getElementById('extract-url');
+    const url = (urlEl && urlEl.value || '').trim();
+    if (!url) { EXTRACT_STATE.error = 'Enter your website URL first.'; render(); return; }
+    EXTRACT_STATE = { running: true, error: '', result: null, url };
+    BRANDING_SAVED = false;
+    render();
+    try {
+      const theme = await api('/branding/extract', { method:'POST', body: JSON.stringify({ url }) });
+      EXTRACT_STATE = { running: false, error: '', result: theme, url: EXTRACT_STATE.url };
+    } catch(e) {
+      EXTRACT_STATE = { running: false, error: e.message || 'Extraction failed', result: null, url: EXTRACT_STATE.url };
+    }
+    render();
+  };
+
+  const applyExtractBtn = document.getElementById('apply-extract-btn');
+  if (applyExtractBtn) applyExtractBtn.onclick = () => {
+    const t = EXTRACT_STATE.result;
+    if (!t) return;
+    const c = t.colors || {};
+    if (c.accent) BRANDING_DRAFT.brandColor = c.accent;
+    if (t.assets && t.assets.logoUrl) BRANDING_DRAFT.logoUrl = t.assets.logoUrl;
+    if (t.assets && t.assets.heroUrl) BRANDING_DRAFT.coverUrl = t.assets.heroUrl;
+    if (t.source && t.source.url && !BRANDING_DRAFT.website) BRANDING_DRAFT.website = t.source.url;
+    // Carry the richer theme tokens for the future multi-token engine; the v1
+    // PUT ignores unknown keys, so this is forward-compatible and harmless.
+    BRANDING_DRAFT.themeColors = c;
+    BRANDING_DRAFT.themeFonts = t.fonts || null;
+    BRANDING_DRAFT.themePalette = t.palette || [];
+    EXTRACT_STATE.result = null;
+    render();
+  };
+
+  const dismissExtractBtn = document.getElementById('dismiss-extract-btn');
+  if (dismissExtractBtn) dismissExtractBtn.onclick = () => {
+    EXTRACT_STATE = { running: false, error: '', result: null, url: EXTRACT_STATE.url };
+    render();
+  };
+
   // ── Marketing materials wiring ───────────────────────────────────
   document.querySelectorAll('.mat-print-btn').forEach(btn => {
     btn.onclick = () => {
@@ -1160,12 +1206,116 @@ async function loadBranding() {
   render();
 }
 
+// ════════════════════════════════════════════════════════════════
+// BRANDING — website import (extraction + confirmation)
+// ════════════════════════════════════════════════════════════════
+function fontLicenseBadge(f) {
+  if (!f) return '';
+  const map = {
+    free:       ['Free to use', 'rgba(127,174,106,.15)', '#a8d89a', 'rgba(127,174,106,.35)'],
+    commercial: ['Licensed — can’t host', 'rgba(212,120,80,.15)', '#e6a07a', 'rgba(212,120,80,.4)'],
+    system:     ['System font', 'rgba(150,150,160,.15)', '#bcbcc8', 'rgba(150,150,160,.35)'],
+    unknown:    ['Unrecognized', 'rgba(150,150,160,.15)', '#bcbcc8', 'rgba(150,150,160,.35)'],
+  };
+  const [label, bg, fg, bd] = map[f.license] || map.unknown;
+  return `<span style="display:inline-block;padding:2px 8px;border-radius:10px;font-size:10px;background:${bg};color:${fg};border:1px solid ${bd}">${label}</span>`;
+}
+
+function renderFontRow(role, f) {
+  if (!f) return '';
+  const sub = (f.license === 'commercial' || f.license === 'unknown') && f.substitute
+    ? `<div style="font-size:11px;color:var(--cream-faint);margin-top:3px">Closest free match: <span style="color:var(--cream-dim)">${f.substitute}</span> — used unless you upload a licensed web-font.</div>`
+    : '';
+  return `
+    <div style="padding:10px 0;border-top:1px solid var(--border)">
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <span style="font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--cream-faint);min-width:54px">${role}</span>
+        <span style="font-size:13px;color:var(--cream)">${f.family || '—'}</span>
+        ${fontLicenseBadge(f)}
+      </div>
+      ${sub}
+    </div>`;
+}
+
+function renderExtractResult() {
+  const t = EXTRACT_STATE.result;
+  if (!t) return '';
+  const c = t.colors || {};
+  const palette = (t.palette || []).slice(0, 10);
+  const warnings = t.warnings || [];
+  const conf = typeof t.confidence === 'number' ? Math.round(t.confidence * 100) : null;
+  const confLine = conf == null ? '' : (conf >= 70
+    ? `Here’s your brand — adjust anything that’s off. <span style="color:var(--cream-faint)">(confidence ${conf}%)</span>`
+    : `We captured a starting point; please review each item. <span style="color:var(--cream-faint)">(confidence ${conf}%)</span>`);
+
+  const swatch = (hex, label) => `
+    <div style="text-align:center">
+      <div style="width:44px;height:44px;border-radius:8px;background:${hex};border:1px solid var(--border);margin:0 auto"></div>
+      <div style="font-size:9px;color:var(--cream-faint);margin-top:4px">${label}</div>
+      <div style="font-size:9px;color:var(--cream-dim);font-family:monospace">${hex}</div>
+    </div>`;
+
+  return `
+    <div style="margin-top:16px;padding:16px;background:var(--bg-card2);border:1px solid var(--border);border-radius:8px">
+      ${confLine ? `<div style="font-size:12px;color:var(--cream-dim);margin-bottom:14px">${confLine}</div>` : ''}
+
+      <div style="font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--gold);margin-bottom:10px">Detected colors</div>
+      <div style="display:flex;gap:14px;flex-wrap:wrap;margin-bottom:8px">
+        ${swatch(c.accent || '#8b2240', 'Accent')}
+        ${swatch(c.accentDeep || c.accent || '#5a1428', 'Accent deep')}
+        ${swatch(c.ink || '#1a1a1a', 'Ink')}
+        ${swatch(c.bg || '#ffffff', 'Background')}
+        ${swatch(c.onAccent || '#ffffff', 'On accent')}
+      </div>
+      ${palette.length ? `
+        <div style="font-size:10px;color:var(--cream-faint);margin:10px 0 6px">Full palette</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          ${palette.map(p=>`<div title="${p.hex}" style="width:24px;height:24px;border-radius:5px;background:${p.hex};border:1px solid var(--border)"></div>`).join('')}
+        </div>` : ''}
+
+      <div style="font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--gold);margin:18px 0 4px">Fonts &amp; licensing</div>
+      ${renderFontRow('Display', t.fonts && t.fonts.display)}
+      ${renderFontRow('Body', t.fonts && t.fonts.body)}
+
+      ${warnings.length ? `
+        <div style="margin-top:14px;padding:10px 12px;background:rgba(212,120,80,.1);border:1px solid rgba(212,120,80,.35);border-radius:6px">
+          ${warnings.map(w=>`<div style="font-size:11px;color:#e6a07a">⚠ ${w}</div>`).join('')}
+        </div>` : ''}
+
+      ${(t.assets && (t.assets.logoUrl || t.assets.heroUrl)) ? `
+        <div style="display:flex;gap:18px;margin-top:14px;align-items:center">
+          ${t.assets.logoUrl ? `<div style="text-align:center"><img src="${t.assets.logoUrl}" style="width:48px;height:48px;border-radius:8px;object-fit:contain;background:#fff;border:1px solid var(--border)" onerror="this.style.display='none'"/><div style="font-size:9px;color:var(--cream-faint);margin-top:3px">Logo</div></div>` : ''}
+          ${t.assets.heroUrl ? `<div style="text-align:center"><img src="${t.assets.heroUrl}" style="width:96px;height:48px;border-radius:6px;object-fit:cover;border:1px solid var(--border)" onerror="this.style.display='none'"/><div style="font-size:9px;color:var(--cream-faint);margin-top:3px">Hero</div></div>` : ''}
+        </div>` : ''}
+
+      <div style="display:flex;gap:10px;margin-top:16px;align-items:center">
+        <button id="apply-extract-btn" class="btn-p" style="padding:10px 16px">Apply to my branding</button>
+        <button id="dismiss-extract-btn" style="background:none;border:1px solid var(--border);color:var(--cream-dim);padding:10px 16px;border-radius:6px;cursor:pointer;font-size:12px">Discard</button>
+        <span style="font-size:11px;color:var(--cream-faint)">Nothing is saved until you review and press Save Branding.</span>
+      </div>
+    </div>`;
+}
+
 function renderBranding() {
   if (!BRANDING) { loadBranding(); return `<div style="text-align:center;padding:60px"><div class="spinner"></div></div>`; }
   const d = BRANDING_DRAFT;
   const VENUE_TYPES = ['wine bar','restaurant','wine shop','winery','hotel','other'];
   return `
     ${BRANDING_SAVED ? `<div style="padding:12px 16px;background:rgba(127,174,106,.12);border:1px solid rgba(127,174,106,.3);border-radius:6px;color:#a8d89a;font-size:13px;margin-bottom:20px">✓ Branding saved successfully</div>` : ''}
+
+    <!-- Import from website -->
+    <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:10px;padding:18px 20px;margin-bottom:24px">
+      <div style="font-size:14px;font-weight:600;color:var(--cream);margin-bottom:4px">Import from my website</div>
+      <div style="font-size:12px;color:var(--cream-faint);margin-bottom:14px">We’ll read your site’s colors, fonts, and logo to give you a starting point. You confirm everything before it goes live — nothing is published automatically.</div>
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+        <input class="inp" id="extract-url" value="${(EXTRACT_STATE.url||'').replace(/"/g,'&quot;')}" placeholder="https://your-venue.com" style="flex:1;min-width:220px"/>
+        <button id="extract-btn" class="btn-p" style="padding:11px 18px;${EXTRACT_STATE.running?'opacity:.6':''}" ${EXTRACT_STATE.running?'disabled':''}>
+          ${EXTRACT_STATE.running ? 'Reading your site…' : 'Import'}
+        </button>
+      </div>
+      ${EXTRACT_STATE.error ? `<div style="margin-top:10px;font-size:12px;color:#e6a07a">⚠ ${EXTRACT_STATE.error}</div>` : ''}
+      ${renderExtractResult()}
+    </div>
 
     <!-- Preview card -->
     <div style="background:var(--bg-card2);border:1px solid var(--border);border-radius:10px;overflow:hidden;margin-bottom:28px">
@@ -1593,8 +1743,8 @@ function generateVenueMaterial(templateKey, venueName, venueCity, qrUrl, brandCo
   let html = VENUE_MATERIAL_TEMPLATES[templateKey];
 
   // Substitute venue name and city
-  html = html.split('{{VENUE_NAME}}').join(venueName || 'Your Venue');
-  html = html.split('{{VENUE_CITY}}').join(venueCity || '');
+  html = html.split('{VENUE_NAME}').join(venueName || 'Your Venue');
+  html = html.split('{VENUE_CITY}').join(venueCity || '');
 
   // Substitute QR code — use Google Charts API for real QR
   const qrSrc = qrUrl
@@ -1605,7 +1755,7 @@ function generateVenueMaterial(templateKey, venueName, venueCity, qrUrl, brandCo
     ? `<img src="${qrSrc}" style="width:100%;height:100%;object-fit:contain"/>`
     : `<div class="qr-placeholder">QR code<br>goes here</div>`;
 
-  html = html.split('{{QR_IMAGE}}').join(qrImgHtml);
+  html = html.split('{QR_IMAGE}').join(qrImgHtml);
 
   // Apply brand color if provided
   if (brandColor && brandColor !== '#4A0F1E') {
